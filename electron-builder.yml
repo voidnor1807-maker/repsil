@@ -1,0 +1,10 @@
+# Phase 3 will flesh this out (icons, NSIS config, signing).
+# For Phase 1 we just need a minimum so `electron-builder install-app-deps`
+# can rebuild native modules against Electron.
+appId: com.repsil.app
+productName: Repsil
+directories:
+  output: release
+files:
+  - out/**
+  - resources/**

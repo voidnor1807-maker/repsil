@@ -1,0 +1,29 @@
+{
+  "app": {
+    "name": "Repsil",
+    "tagline": "أرشيف مستنداتك العصري"
+  },
+  "common": {
+    "continue": "متابعة",
+    "back": "رجوع",
+    "choose": "اختيار",
+    "cancel": "إلغاء",
+    "openArchive": "فتح الأرشيف"
+  },
+  "firstRun": {
+    "step1": {
+      "badge": "أهلاً بك",
+      "title": "اختر اللغة",
+      "subtitle": "يمكنك تغييرها لاحقاً من الإعدادات.",
+      "englishLabel": "English",
+      "arabicLabel": "العربية"
+    },
+    "step2": {
+      "badge": "اقتربنا",
+      "title": "اختر مجلد الأرشيف",
+      "subtitle": "يقوم Repsil بمراقبة هذا المجلد. كل ما تضعه فيه — من خلال المستكشف أو من خلال Repsil — يصبح قابلاً للبحث.",
+      "chooseFolder": "اختيار مجلد",
+      "noFolderYet": "لم يتم اختيار مجلد بعد"
+    }
+  }
+}

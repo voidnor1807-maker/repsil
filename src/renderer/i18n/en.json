@@ -1,0 +1,29 @@
+{
+  "app": {
+    "name": "Repsil",
+    "tagline": "Your modern document archive"
+  },
+  "common": {
+    "continue": "Continue",
+    "back": "Back",
+    "choose": "Choose",
+    "cancel": "Cancel",
+    "openArchive": "Open archive"
+  },
+  "firstRun": {
+    "step1": {
+      "badge": "Welcome",
+      "title": "Choose your language",
+      "subtitle": "You can switch this any time from Settings.",
+      "englishLabel": "English",
+      "arabicLabel": "العربية"
+    },
+    "step2": {
+      "badge": "Almost there",
+      "title": "Pick your archive folder",
+      "subtitle": "Repsil watches this folder. Anything you drop here — through Explorer or through Repsil — becomes searchable.",
+      "chooseFolder": "Choose folder",
+      "noFolderYet": "No folder chosen yet"
+    }
+  }
+}
