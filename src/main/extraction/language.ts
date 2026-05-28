@@ -30,17 +30,18 @@ export function detectLanguage(text: string): DetectedLanguage {
   const scriptTotal = arabicChars + latinChars
   if (scriptTotal > 0) {
     const arabicRatio = arabicChars / scriptTotal
-    if (arabicRatio > 0.3) return 'ar'
-    if (arabicRatio < 0.05) {
-      const code = franc(sample, { minLength: 8 }) as string
-      if (code === 'eng') return 'en'
-      // Latin-script-only fallback: assume English unless franc disagrees strongly
-      return 'en'
-    }
+    // Any meaningful Arabic presence wins — Arabic script is decisive and these
+    // are exactly the bilingual EN/AR documents the app targets. The whole
+    // [0.05, 0.3] band used to fall through unhandled (WR-07).
+    if (arabicRatio >= 0.15) return 'ar'
+    // Essentially all-Latin: it's English (franc on short Latin text is noisy).
+    if (arabicRatio < 0.05) return 'en'
+    // Genuinely ambiguous 0.05–0.15: let franc make a single call below.
   }
 
   const code = franc(sample, { minLength: 8 }) as string
   if (code === 'eng') return 'en'
   if (code === 'arb' || code === 'ara') return 'ar'
-  return null
+  // Mixed Latin-dominant text franc couldn't pin down: default to English.
+  return scriptTotal > 0 && latinChars > 0 ? 'en' : null
 }

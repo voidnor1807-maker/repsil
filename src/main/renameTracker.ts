@@ -5,9 +5,11 @@
  * Two match strategies:
  *  1. by content_hash — strongest signal, used once extraction has hashed the
  *     new file.
- *  2. by size_bytes — fallback for files renamed BEFORE they were ever
- *     extracted (no hash yet). Only trusted when the size is unambiguous
- *     (exactly one pending snapshot has it), since many files share sizes.
+ *  2. by size_bytes + ext — fallback for files renamed BEFORE they were ever
+ *     extracted (no hash yet). Only trusted when (size, ext) is unambiguous
+ *     (exactly one pending snapshot has it), since many files share a size.
+ *     Requiring the extension to match too sharply cuts false positives where
+ *     two unrelated files merely happen to share a byte count (WR-04).
  *
  * Snapshots expire after 60s — long enough to cover any unlink→add gap, short
  * enough to avoid stale matches.
@@ -16,6 +18,7 @@
 export interface RenameSnapshot {
   content_hash: string | null
   size_bytes: number
+  ext: string
   filename: string
   title: string | null
   doc_date: string | null
@@ -47,10 +50,14 @@ export function consumeMatch(contentHash: string): RenameSnapshot | null {
   return hit
 }
 
-/** Fallback: match by size only when exactly one snapshot has that size. */
-export function consumeMatchBySize(sizeBytes: number): RenameSnapshot | null {
+/**
+ * Fallback: match by (size, ext) only when exactly one snapshot has that pair.
+ * Requiring the extension to match avoids attaching one document's curated
+ * metadata to an unrelated same-size file (WR-04).
+ */
+export function consumeMatchBySize(sizeBytes: number, ext: string): RenameSnapshot | null {
   prune()
-  const matches = snapshots.filter((s) => s.size_bytes === sizeBytes)
+  const matches = snapshots.filter((s) => s.size_bytes === sizeBytes && s.ext === ext)
   if (matches.length !== 1) return null
   const hit = matches[0]
   snapshots = snapshots.filter((s) => s !== hit)

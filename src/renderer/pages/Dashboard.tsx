@@ -58,16 +58,25 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     let cancelled = false
     setLoading(true)
     const timer = setTimeout(async () => {
-      const hits = await window.repsil.documents.search(query, effectiveFilters, {
-        limit: PAGE_SIZE,
-        offset: 0
-      })
-      if (cancelled) return
-      setResults(hits)
-      setHasMore(hits.length === PAGE_SIZE)
-      setLoading(false)
-      const tagMap = await window.repsil.tags.forDocuments(hits.map((h) => h.id))
-      if (!cancelled) setTagsByDoc(tagMap)
+      try {
+        const hits = await window.repsil.documents.search(query, effectiveFilters, {
+          limit: PAGE_SIZE,
+          offset: 0
+        })
+        if (cancelled) return
+        setResults(hits)
+        setHasMore(hits.length === PAGE_SIZE)
+        const tagMap = await window.repsil.tags.forDocuments(hits.map((h) => h.id))
+        if (!cancelled) setTagsByDoc(tagMap)
+      } catch (err) {
+        console.error('search failed:', err)
+        if (!cancelled) {
+          setResults([])
+          setHasMore(false)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
     }, 200)
     return () => {
       cancelled = true
@@ -76,14 +85,18 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   }, [query, effectiveFilters])
 
   const loadMore = async (): Promise<void> => {
-    const hits = await window.repsil.documents.search(query, effectiveFilters, {
-      limit: PAGE_SIZE,
-      offset: results.length
-    })
-    setResults((prev) => [...prev, ...hits])
-    setHasMore(hits.length === PAGE_SIZE)
-    const tagMap = await window.repsil.tags.forDocuments(hits.map((h) => h.id))
-    setTagsByDoc((prev) => ({ ...prev, ...tagMap }))
+    try {
+      const hits = await window.repsil.documents.search(query, effectiveFilters, {
+        limit: PAGE_SIZE,
+        offset: results.length
+      })
+      setResults((prev) => [...prev, ...hits])
+      setHasMore(hits.length === PAGE_SIZE)
+      const tagMap = await window.repsil.tags.forDocuments(hits.map((h) => h.id))
+      setTagsByDoc((prev) => ({ ...prev, ...tagMap }))
+    } catch (err) {
+      console.error('load more failed:', err)
+    }
   }
 
   const reloadTree = React.useCallback(async () => {
@@ -101,23 +114,30 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     void reloadTags()
   }, [reloadTree, reloadTags])
 
-  // Poll queue status while busy
+  // Poll queue status on a steady cadence for as long as the dashboard is
+  // mounted. The self-scheduling guard checks `cancelled` BEFORE arming the
+  // next timer, so an in-flight tick can't leak a timer the cleanup misses
+  // (WR-08). No reactive deps — restarting the loop on results.length was what
+  // produced overlapping timers.
   React.useEffect(() => {
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | null = null
     const tick = async (): Promise<void> => {
-      const status = await window.repsil.extraction.status()
-      if (cancelled) return
-      setQueueStatus(status)
-      const busy = status.queued > 0 || status.pendingInDb > 0
-      if (busy) timer = setTimeout(tick, 1500)
+      try {
+        const status = await window.repsil.extraction.status()
+        if (cancelled) return
+        setQueueStatus(status)
+      } catch (err) {
+        console.error('queue status poll failed:', err)
+      }
+      if (!cancelled) timer = setTimeout(() => void tick(), 1500)
     }
     void tick()
     return () => {
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [results.length])
+  }, [])
 
   if (selectedId !== null) {
     return (

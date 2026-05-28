@@ -88,6 +88,7 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
       recordDeletion({
         content_hash: row.content_hash,
         size_bytes: row.size_bytes,
+        ext: row.ext,
         filename: row.filename,
         title: row.title,
         doc_date: row.doc_date,

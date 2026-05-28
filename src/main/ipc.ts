@@ -1,5 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
-import { join } from 'node:path'
+import { statSync } from 'node:fs'
+import { resolveInsideArchive } from './pathSafety'
 import type {
   AppSettings,
   DbStatus,
@@ -29,13 +30,30 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'settings:update',
     async (_evt, patch: Partial<AppSettings>): Promise<AppSettings> => {
+      // Validate a new archive folder BEFORE persisting it, so a bad path never
+      // gets written to settings.json (WR-03).
+      if (patch.rootPath != null) {
+        let isDir = false
+        try {
+          isDir = statSync(patch.rootPath).isDirectory()
+        } catch {
+          isDir = false
+        }
+        if (!isDir) throw new Error('Selected archive folder does not exist')
+      }
+
       const next = await updateSettings(patch)
       if (next.rootPath) {
-        const repsil = openDb(next.rootPath)
-        loadArchiveSettings()
-        bindQueue(repsil)
-        await startWatcher(repsil)
-        drainPending()
+        try {
+          const repsil = openDb(next.rootPath)
+          loadArchiveSettings()
+          bindQueue(repsil)
+          await startWatcher(repsil)
+          drainPending()
+        } catch (err) {
+          console.error('Failed to switch archive:', err)
+          throw err instanceof Error ? err : new Error(String(err))
+        }
       }
       return next
     }
@@ -137,13 +155,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('documents:openExternal', async (_evt, relPath: string): Promise<string> => {
     const current = getDb()
     if (!current) return 'no archive open'
-    return shell.openPath(join(current.rootPath, relPath))
+    const abs = resolveInsideArchive(current.rootPath, relPath)
+    if (!abs) return 'invalid path'
+    return shell.openPath(abs)
   })
 
   ipcMain.handle('documents:revealInFolder', (_evt, relPath: string): void => {
     const current = getDb()
     if (!current) return
-    shell.showItemInFolder(join(current.rootPath, relPath))
+    const abs = resolveInsideArchive(current.rootPath, relPath)
+    if (!abs) return
+    shell.showItemInFolder(abs)
   })
 
   ipcMain.handle('extraction:status', () => queueStatus())
@@ -372,6 +394,14 @@ function runFilteredSearch(
     `
   }
 
-  const rows = db.prepare(sql).all(params) as SearchResult[]
+  let rows: SearchResult[]
+  try {
+    rows = db.prepare(sql).all(params) as SearchResult[]
+  } catch (err) {
+    // FTS5 can still reject some MATCH inputs; degrade to empty results
+    // instead of throwing an unhandled rejection across the IPC bridge (WR-09).
+    console.error('search query failed:', err)
+    return []
+  }
   return rows.map((r) => ({ ...r, snippet: renderSnippet(r.snippet) }))
 }

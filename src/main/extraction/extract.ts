@@ -5,13 +5,12 @@ import type { RepsilDb } from '../db'
 import type { DocumentRow, ExtractionStatus } from '../db/queries'
 import { consumeMatch, consumeMatchBySize } from '../renameTracker'
 import { getSettings } from '../settings'
+import { OCR_IMAGE_EXTS } from '@shared/extensions'
 import { detectLanguage } from './language'
 import { guessMetadata, type MetadataGuess } from './metadata'
 import { ocrImage } from './ocr'
 import { ocrPdf } from './pdfOcr'
 import { extractPdf } from './pdfText'
-
-const OCR_IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'tiff', 'tif', 'bmp', 'webp'])
 
 type ProtectedField = 'title' | 'doc_date' | 'source' | 'notes'
 
@@ -56,7 +55,7 @@ export async function extractOne(repsil: RepsilDb, id: number): Promise<Extracti
     row.title === null && row.doc_date === null && row.source === null &&
     row.notes === null && row.user_edited_fields === '[]'
   if (isFresh) {
-    const snap = consumeMatch(hash) ?? consumeMatchBySize(stat.size)
+    const snap = consumeMatch(hash) ?? consumeMatchBySize(stat.size, row.ext)
     if (snap) {
       repsil.queries.restoreFromRename.run({
         id,

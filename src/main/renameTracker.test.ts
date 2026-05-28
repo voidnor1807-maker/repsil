@@ -4,6 +4,7 @@ import { clearAll, consumeMatch, consumeMatchBySize, recordDeletion } from './re
 const base = {
   content_hash: 'abc' as string | null,
   size_bytes: 100,
+  ext: 'pdf',
   filename: 'a.pdf',
   title: 'My Title' as string | null,
   doc_date: null,
@@ -31,20 +32,31 @@ describe('renameTracker', () => {
     expect(consumeMatch('abc')).toBeNull()
   })
 
-  test('falls back to size match when hash is null and size is unique', () => {
+  test('falls back to size+ext match when hash is null and the pair is unique', () => {
     recordDeletion({ ...base, content_hash: null })
-    expect(consumeMatchBySize(100)?.title).toBe('My Title')
+    expect(consumeMatchBySize(100, 'pdf')?.title).toBe('My Title')
   })
 
-  test('does NOT size-match when two same-size deletions are ambiguous', () => {
+  test('does NOT size-match when two same-size+ext deletions are ambiguous', () => {
     recordDeletion({ ...base, content_hash: null, filename: 'a.pdf', title: 'A' })
     recordDeletion({ ...base, content_hash: null, filename: 'b.pdf', title: 'B' })
-    expect(consumeMatchBySize(100)).toBeNull()
+    expect(consumeMatchBySize(100, 'pdf')).toBeNull()
+  })
+
+  test('does NOT size-match when the extension differs (WR-04)', () => {
+    recordDeletion({ ...base, content_hash: null, ext: 'pdf' })
+    expect(consumeMatchBySize(100, 'png')).toBeNull()
+  })
+
+  test('size+ext disambiguates two same-size files of different type', () => {
+    recordDeletion({ ...base, content_hash: null, ext: 'pdf', title: 'The PDF' })
+    recordDeletion({ ...base, content_hash: null, ext: 'png', filename: 'a.png', title: 'The PNG' })
+    expect(consumeMatchBySize(100, 'png')?.title).toBe('The PNG')
   })
 
   test('size match is one-shot', () => {
     recordDeletion({ ...base, content_hash: null })
-    consumeMatchBySize(100)
-    expect(consumeMatchBySize(100)).toBeNull()
+    consumeMatchBySize(100, 'pdf')
+    expect(consumeMatchBySize(100, 'pdf')).toBeNull()
   })
 })

@@ -20,8 +20,15 @@ export interface PdfExtraction {
 }
 
 const SCANNED_THRESHOLD_CHARS_PER_PAGE = 8
+// Guard the serial fast lane: a single multi-GB / malformed PDF read whole into
+// memory could exhaust the heap and starve all other extraction (WR-06).
+const MAX_PDF_BYTES = 100 * 1024 * 1024
 
 export async function extractPdf(absPath: string): Promise<PdfExtraction> {
+  const stat = await fs.stat(absPath)
+  if (stat.size > MAX_PDF_BYTES) {
+    throw new Error(`PDF too large to index (${Math.round(stat.size / (1024 * 1024))} MB)`)
+  }
   const buffer = await fs.readFile(absPath)
   const result = (await pdf(buffer)) as PdfParseResult
   const text = result.text ?? ''

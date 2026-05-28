@@ -65,7 +65,7 @@ function FolderRow({
             tabIndex={0}
             onClick={() => {
               onSelect(node.rel_path)
-              if (hasChildren) setOpen((o) => o)
+              if (hasChildren) setOpen(true)
             }}
             onDoubleClick={() => setOpen((o) => !o)}
             className={cn(

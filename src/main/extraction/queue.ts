@@ -1,6 +1,8 @@
 import type { RepsilDb } from '../db'
 import type { DocumentRow } from '../db/queries'
+import { OCR_IMAGE_EXTS } from '@shared/extensions'
 import { extractOne } from './extract'
+import { maybeRecycleOcr } from './ocr'
 
 /**
  * Two-lane in-process extraction queue.
@@ -11,8 +13,6 @@ import { extractOne } from './extract'
  * Each lane is serial within itself. tesseract.js already runs OCR off the
  * main thread, so the slow lane never blocks the UI.
  */
-const OCR_IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'tiff', 'tif', 'bmp', 'webp'])
-
 let fastChain: Promise<void> = Promise.resolve()
 let slowChain: Promise<void> = Promise.resolve()
 const queued = new Set<number>()
@@ -48,6 +48,10 @@ export function enqueueExtraction(id: number): void {
   const ocr = row ? isOcrJob(row) : false
 
   const run = async (): Promise<void> => {
+    // The archive was switched out from under this job between enqueue and run.
+    // Dropping it is safe: the row is still extraction_status='pending' in its
+    // DB, so drainPending() at bind time and the periodic reconcile both
+    // re-enqueue it against the correct archive (WR-05).
     if (activeRepsil !== repsil) return
     try {
       await extractOne(repsil, id)
@@ -56,6 +60,8 @@ export function enqueueExtraction(id: number): void {
       console.error(`extractOne(${id}) threw:`, err)
     } finally {
       queued.delete(id)
+      // Recycle the OCR worker only between jobs, never mid-document (CR-03).
+      if (ocr) await maybeRecycleOcr()
     }
   }
 

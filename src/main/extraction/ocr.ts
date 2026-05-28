@@ -41,6 +41,9 @@ const RECYCLE_AFTER = 50
 
 let workerPromise: Promise<Worker> | null = null
 let sinceRecycle = 0
+// Resolves when no recognize() is currently running. terminateOcr awaits this
+// so the worker is never torn down mid-recognition (CR-03).
+let recognizeInFlight: Promise<void> = Promise.resolve()
 
 async function getWorker(): Promise<Worker> {
   if (!workerPromise) {
@@ -67,18 +70,37 @@ export interface OcrResult {
 
 export async function ocrImage(input: string | Buffer): Promise<OcrResult> {
   const w = await getWorker()
-  const { data } = await w.recognize(input)
-  const result = { text: (data.text ?? '').trim(), confidence: data.confidence ?? 0 }
-  sinceRecycle++
+  // Mark a recognition as in flight so terminateOcr can wait it out. We never
+  // recycle from inside here — that would tear the worker down mid-PDF when a
+  // single document needs >RECYCLE_AFTER pages (CR-03). Recycling happens at
+  // the job boundary via maybeRecycleOcr().
+  let release!: () => void
+  recognizeInFlight = new Promise<void>((r) => {
+    release = r
+  })
+  try {
+    const { data } = await w.recognize(input)
+    sinceRecycle++
+    return { text: (data.text ?? '').trim(), confidence: data.confidence ?? 0 }
+  } finally {
+    release()
+  }
+}
+
+/**
+ * Recycle the worker if it has done enough recognitions. Call this BETWEEN
+ * queue jobs, never mid-document. Caps memory growth without racing the
+ * per-page PDF OCR loop (E3 + CR-03).
+ */
+export async function maybeRecycleOcr(): Promise<void> {
   if (sinceRecycle >= RECYCLE_AFTER) {
-    sinceRecycle = 0
-    // Serial OCR lane — safe to tear down now; next job recreates the worker.
     await terminateOcr()
   }
-  return result
 }
 
 export async function terminateOcr(): Promise<void> {
+  // Wait for any in-flight recognition so we never terminate a busy worker.
+  await recognizeInFlight.catch(() => {})
   if (!workerPromise) return
   try {
     const w = await workerPromise
@@ -87,4 +109,5 @@ export async function terminateOcr(): Promise<void> {
     // worker may already be torn down or failed to init — nothing to do
   }
   workerPromise = null
+  sinceRecycle = 0
 }

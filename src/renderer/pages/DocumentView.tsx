@@ -15,6 +15,8 @@ import { Button } from '@renderer/components/ui/button'
 import { DirectionalIcon } from '@renderer/components/layout/DirectionalIcon'
 import { TagInput } from '@renderer/components/TagInput'
 import { cn } from '@renderer/lib/utils'
+import { PREVIEW_IMAGE_EXTS } from '@shared/extensions'
+import { makeRepsilFileUrl } from '@shared/repsilFile'
 import type { DocumentDetail, DocumentMetadataPatch } from '@shared/types'
 
 interface DocumentViewProps {
@@ -29,11 +31,9 @@ interface FormState {
   notes: string
 }
 
-const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff', 'tif', 'svg'])
-
-function makeFileUrl(relPath: string): string {
-  return `repsil-file://archive/${encodeURI(relPath)}`
-}
+// How often / how long we re-poll a document after kicking off extraction.
+const POLL_INTERVAL_MS = 1500
+const POLL_TIMEOUT_MS = 120_000
 
 function toForm(doc: DocumentDetail): FormState {
   return {
@@ -64,26 +64,38 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
   const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([])
   const [extractedText, setExtractedText] = React.useState('')
   const [originalExtractedText, setOriginalExtractedText] = React.useState('')
+  // Cleared on unmount so background poll loops stop touching state (IN-03).
+  const aliveRef = React.useRef(true)
+  React.useEffect(() => {
+    aliveRef.current = true
+    return () => {
+      aliveRef.current = false
+    }
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
     void (async () => {
-      const [fresh, docTags, allTags] = await Promise.all([
-        window.repsil.documents.get(id),
-        window.repsil.tags.forDocument(id),
-        window.repsil.tags.list()
-      ])
-      if (cancelled || !fresh) return
-      setDoc(fresh)
-      const f = toForm(fresh)
-      setForm(f)
-      setOriginal(f)
-      const names = docTags.map((t) => t.name)
-      setTags(names)
-      setOriginalTags(names)
-      setTagSuggestions(allTags.map((t) => t.name))
-      setExtractedText(fresh.extracted_text ?? '')
-      setOriginalExtractedText(fresh.extracted_text ?? '')
+      try {
+        const [fresh, docTags, allTags] = await Promise.all([
+          window.repsil.documents.get(id),
+          window.repsil.tags.forDocument(id),
+          window.repsil.tags.list()
+        ])
+        if (cancelled || !fresh) return
+        setDoc(fresh)
+        const f = toForm(fresh)
+        setForm(f)
+        setOriginal(f)
+        const names = docTags.map((t) => t.name)
+        setTags(names)
+        setOriginalTags(names)
+        setTagSuggestions(allTags.map((t) => t.name))
+        setExtractedText(fresh.extracted_text ?? '')
+        setOriginalExtractedText(fresh.extracted_text ?? '')
+      } catch (err) {
+        console.error('failed to load document:', err)
+      }
     })()
     return () => {
       cancelled = true
@@ -130,17 +142,18 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
     setDoc({ ...doc, extraction_status: 'pending', error_message: null })
     const start = Date.now()
     const poll = async (): Promise<void> => {
+      if (!aliveRef.current) return
       const fresh = await window.repsil.documents.get(id)
-      if (!fresh) return
-      if (fresh.extraction_status !== 'pending' || Date.now() - start > 120_000) {
+      if (!aliveRef.current || !fresh) return
+      if (fresh.extraction_status !== 'pending' || Date.now() - start > POLL_TIMEOUT_MS) {
         setDoc(fresh)
         setExtractedText(fresh.extracted_text ?? '')
         setOriginalExtractedText(fresh.extracted_text ?? '')
         return
       }
-      setTimeout(() => void poll(), 1500)
+      setTimeout(() => void poll(), POLL_INTERVAL_MS)
     }
-    setTimeout(() => void poll(), 1500)
+    setTimeout(() => void poll(), POLL_INTERVAL_MS)
   }
 
   if (!doc || !form) {
@@ -152,8 +165,8 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
   }
 
   const isPdf = doc.ext === 'pdf'
-  const isImage = IMAGE_EXTS.has(doc.ext)
-  const fileUrl = makeFileUrl(doc.rel_path)
+  const isImage = PREVIEW_IMAGE_EXTS.has(doc.ext)
+  const fileUrl = makeRepsilFileUrl(doc.rel_path)
   const editedFields = parseEdited(doc.user_edited_fields)
   const canOcr = isImage
   const ocrInProgress =
@@ -167,17 +180,18 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
     // Re-poll the doc until extraction finishes
     const start = Date.now()
     const poll = async (): Promise<void> => {
+      if (!aliveRef.current) return
       const fresh = await window.repsil.documents.get(id)
-      if (!fresh) return
-      if (fresh.extraction_status !== 'pending' || Date.now() - start > 120_000) {
+      if (!aliveRef.current || !fresh) return
+      if (fresh.extraction_status !== 'pending' || Date.now() - start > POLL_TIMEOUT_MS) {
         setDoc(fresh)
         setForm(toForm(fresh))
         setOriginal(toForm(fresh))
         return
       }
-      setTimeout(() => void poll(), 1500)
+      setTimeout(() => void poll(), POLL_INTERVAL_MS)
     }
-    setTimeout(() => void poll(), 1500)
+    setTimeout(() => void poll(), POLL_INTERVAL_MS)
   }
 
   return (

@@ -10,7 +10,10 @@ export function toFtsMatchExpression(raw: string): string | null {
   const tokens = trimmed
     .split(/\s+/)
     .map((t) => t.replace(/"/g, ''))
-    .filter((t) => t.length > 0)
+    // Keep only tokens with at least one letter or digit (any script). A token
+    // of pure punctuation (e.g. "+", "(") tokenizes to nothing and makes FTS5
+    // throw "fts5: syntax error" on the resulting empty phrase (WR-09).
+    .filter((t) => /[\p{L}\p{N}]/u.test(t))
   if (tokens.length === 0) return null
   return tokens.map((t) => `"${t}"`).join(' ')
 }

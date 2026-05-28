@@ -38,6 +38,15 @@ export function openDb(rootPath: string): RepsilDb {
 
 export function closeDb(): void {
   if (!current) return
-  current.db.close()
-  current = null
+  const { db } = current
+  try {
+    // Fold the WAL back into the main db file so an archive switch doesn't
+    // leave -wal/-shm files behind (IN-06).
+    db.pragma('wal_checkpoint(TRUNCATE)')
+    db.close()
+  } catch (err) {
+    console.error('Error closing DB:', err)
+  } finally {
+    current = null
+  }
 }

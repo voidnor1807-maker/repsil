@@ -14,4 +14,11 @@ describe('toFtsMatchExpression', () => {
   test('preserves Arabic tokens', () => {
     expect(toFtsMatchExpression('فاتورة الكهرباء')).toBe('"فاتورة" "الكهرباء"')
   })
+  test('returns null for punctuation-only input (WR-09)', () => {
+    expect(toFtsMatchExpression('+ - ( )')).toBeNull()
+    expect(toFtsMatchExpression('***')).toBeNull()
+  })
+  test('drops punctuation tokens but keeps real ones', () => {
+    expect(toFtsMatchExpression('tax + 2026')).toBe('"tax" "2026"')
+  })
 })
