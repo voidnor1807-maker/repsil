@@ -8,6 +8,7 @@
     "back": "رجوع",
     "choose": "اختيار",
     "cancel": "إلغاء",
+    "save": "حفظ",
     "openArchive": "فتح الأرشيف"
   },
   "firstRun": {
@@ -25,5 +26,63 @@
       "chooseFolder": "اختيار مجلد",
       "noFolderYet": "لم يتم اختيار مجلد بعد"
     }
+  },
+  "dashboard": {
+    "folders": "المجلدات",
+    "searchPlaceholder": "بحث في المستندات…",
+    "noResults": "لا توجد نتائج",
+    "emptyArchive": "لا توجد مستندات بعد — ضع الملفات في مجلد الأرشيف.",
+    "allIndexed": "اكتملت الفهرسة",
+    "indexing_one": "جارٍ فهرسة ١",
+    "indexing_other": "جارٍ فهرسة {{count}}",
+    "status_pending": "جارٍ الفهرسة…",
+    "status_failed": "فشل",
+    "loadMore": "تحميل المزيد"
+  },
+  "filters": {
+    "button": "تصفية",
+    "title": "تصفية",
+    "clear": "مسح",
+    "dateRange": "تاريخ المستند",
+    "fileType": "نوع الملف",
+    "tags": "الوسوم",
+    "matchAll": "تطابق الكل",
+    "matchAny": "تطابق أي"
+  },
+  "document": {
+    "metadata": "التفاصيل",
+    "extractedText": "النص المستخرج",
+    "noExtractedText": "لم يتم استخراج أي نص بعد.",
+    "noPreview": "لا يوجد عرض لهذا النوع من الملفات.",
+    "runOcr": "تشغيل التعرف الضوئي",
+    "ocrRunning": "جارٍ التعرف الضوئي…",
+    "tagsPlaceholder": "إضافة وسوم…",
+    "openExternal": "فتح في التطبيق الافتراضي",
+    "revealInFolder": "إظهار في المجلد",
+    "extractionFailed": "فشل الاستخراج.",
+    "retry": "إعادة المحاولة",
+    "fields": {
+      "title": "العنوان",
+      "docDate": "تاريخ المستند",
+      "source": "من",
+      "notes": "ملاحظات",
+      "tags": "الوسوم"
+    }
+  },
+  "settings": {
+    "title": "الإعدادات",
+    "archive": "الأرشيف",
+    "appearance": "المظهر",
+    "documents": "المستندات",
+    "rootPath": "مجلد الأرشيف",
+    "language": "اللغة",
+    "theme": "السمة",
+    "themeDark": "داكن",
+    "themeLight": "فاتح",
+    "dateFormat": "صيغة التاريخ",
+    "dateDmy": "يوم / شهر",
+    "dateMdy": "شهر / يوم",
+    "pdfOcrMaxPages": "حد صفحات OCR للـ PDF",
+    "lightModeWarning": "الوضع الفاتح جاهز تقنياً لكن لوحة الألوان غير مكتملة — توقع بعض النقص حتى مرحلة الصقل في المرحلة الثالثة."
   }
 }

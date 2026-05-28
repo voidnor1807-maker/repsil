@@ -1,7 +1,14 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { registerIpcHandlers } from './ipc'
-import { loadSettings } from './settings'
+import { loadArchiveSettings, loadSettings } from './settings'
+import { closeDb, openDb } from './db'
+import { bindQueue, drainPending, unbindQueue } from './extraction/queue'
+import { terminateOcr } from './extraction/ocr'
+import { registerProtocolHandlers, registerProtocolSchemes } from './protocol'
+import { startWatcher, stopWatcher } from './watcher/fileWatcher'
+
+registerProtocolSchemes()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -48,8 +55,20 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   app.setAppUserModelId('com.repsil.app')
+  registerProtocolHandlers()
 
-  await loadSettings()
+  const settings = await loadSettings()
+  if (settings.rootPath) {
+    try {
+      const repsil = openDb(settings.rootPath)
+      loadArchiveSettings()
+      bindQueue(repsil)
+      await startWatcher(repsil)
+      drainPending()
+    } catch (err) {
+      console.error('Failed to open archive at startup:', err)
+    }
+  }
   registerIpcHandlers()
   createWindow()
 
@@ -60,4 +79,13 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('will-quit', async (event) => {
+  event.preventDefault()
+  await stopWatcher()
+  unbindQueue()
+  await terminateOcr()
+  closeDb()
+  app.exit(0)
 })

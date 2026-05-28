@@ -1,6 +1,4 @@
 # Phase 3 will flesh this out (icons, NSIS config, signing).
-# For Phase 1 we just need a minimum so `electron-builder install-app-deps`
-# can rebuild native modules against Electron.
 appId: com.repsil.app
 productName: Repsil
 directories:
@@ -8,3 +6,20 @@ directories:
 files:
   - out/**
   - resources/**
+# Native binaries and worker/wasm assets cannot be loaded from inside the asar
+# archive — they must sit as loose files. (K2)
+asarUnpack:
+  - "**/*.node"
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/@napi-rs/**"
+  - "**/node_modules/tesseract.js/**"
+  - "**/node_modules/tesseract.js-core/**"
+  - "**/node_modules/pdfjs-dist/**"
+# Ship OCR language data unpacked so OCR works fully offline. Place
+# eng.traineddata + ara.traineddata in resources/tessdata/ (see the README
+# there). (K1)
+extraResources:
+  - from: resources/tessdata
+    to: tessdata
+    filter:
+      - "**/*.traineddata"

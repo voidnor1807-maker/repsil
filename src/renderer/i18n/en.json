@@ -8,6 +8,7 @@
     "back": "Back",
     "choose": "Choose",
     "cancel": "Cancel",
+    "save": "Save",
     "openArchive": "Open archive"
   },
   "firstRun": {
@@ -25,5 +26,63 @@
       "chooseFolder": "Choose folder",
       "noFolderYet": "No folder chosen yet"
     }
+  },
+  "dashboard": {
+    "folders": "Folders",
+    "searchPlaceholder": "Search documents…",
+    "noResults": "No matches",
+    "emptyArchive": "No documents yet — drop files into your archive folder.",
+    "allIndexed": "All indexed",
+    "indexing_one": "1 indexing",
+    "indexing_other": "{{count}} indexing",
+    "status_pending": "Indexing…",
+    "status_failed": "Failed",
+    "loadMore": "Load more"
+  },
+  "filters": {
+    "button": "Filters",
+    "title": "Filters",
+    "clear": "Clear",
+    "dateRange": "Document date",
+    "fileType": "File type",
+    "tags": "Tags",
+    "matchAll": "Match all",
+    "matchAny": "Match any"
+  },
+  "document": {
+    "metadata": "Details",
+    "extractedText": "Extracted text",
+    "noExtractedText": "No text extracted yet.",
+    "noPreview": "No preview available for this file type.",
+    "runOcr": "Run OCR",
+    "ocrRunning": "Running OCR…",
+    "tagsPlaceholder": "Add tags…",
+    "openExternal": "Open in default app",
+    "revealInFolder": "Show in folder",
+    "extractionFailed": "Extraction failed.",
+    "retry": "Retry",
+    "fields": {
+      "title": "Title",
+      "docDate": "Document date",
+      "source": "From",
+      "notes": "Notes",
+      "tags": "Tags"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "archive": "Archive",
+    "appearance": "Appearance",
+    "documents": "Documents",
+    "rootPath": "Archive folder",
+    "language": "Language",
+    "theme": "Theme",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "dateFormat": "Date format",
+    "dateDmy": "Day / Month",
+    "dateMdy": "Month / Day",
+    "pdfOcrMaxPages": "PDF OCR page limit",
+    "lightModeWarning": "Light mode is wired in but the color palette is unfinished — expect rough edges until Phase 3 polish."
   }
 }

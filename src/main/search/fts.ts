@@ -1,0 +1,16 @@
+/**
+ * Turn user input into a safe FTS5 MATCH expression. Each whitespace-
+ * delimited token becomes a quoted phrase (AND-combined). Embedded double
+ * quotes are stripped so a user can't inject FTS syntax. Empty input yields
+ * null so callers can short-circuit.
+ */
+export function toFtsMatchExpression(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const tokens = trimmed
+    .split(/\s+/)
+    .map((t) => t.replace(/"/g, ''))
+    .filter((t) => t.length > 0)
+  if (tokens.length === 0) return null
+  return tokens.map((t) => `"${t}"`).join(' ')
+}
