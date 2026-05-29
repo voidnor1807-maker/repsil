@@ -33,14 +33,32 @@ describe('diffManifests', () => {
     expect(plan.pullMeta).toEqual([])
   })
 
-  it('pulls remote content when its mtime is newer', () => {
+  it('pulls remote content when its mtime is newer, flagging a conflict', () => {
     const plan = diffManifests(m([entry('a.pdf', 'h1', 10)]), m([entry('a.pdf', 'h2', 20)]))
     expect(plan.pullFiles).toEqual(['a.pdf'])
+    expect(plan.conflicts).toEqual(['a.pdf'])
   })
 
-  it('keeps local content when local mtime is newer', () => {
+  it('keeps local content when local mtime is newer (no pull, no conflict here)', () => {
     const plan = diffManifests(m([entry('a.pdf', 'h1', 30)]), m([entry('a.pdf', 'h2', 20)]))
     expect(plan.pullFiles).toEqual([])
+    expect(plan.conflicts).toEqual([])
+  })
+
+  it('breaks an mtime tie deterministically by content hash', () => {
+    // equal mtime, remote hash greater → remote wins + conflict preserved
+    const win = diffManifests(m([entry('a.pdf', 'h1', 10)]), m([entry('a.pdf', 'h2', 10)]))
+    expect(win.conflicts).toEqual(['a.pdf'])
+    // equal mtime, local hash greater → local wins, nothing pulled
+    const keep = diffManifests(m([entry('a.pdf', 'h2', 10)]), m([entry('a.pdf', 'h1', 10)]))
+    expect(keep.pullFiles).toEqual([])
+    expect(keep.conflicts).toEqual([])
+  })
+
+  it('treats a missing local file as a plain pull, not a conflict', () => {
+    const plan = diffManifests(m([]), m([entry('a.pdf', 'h1', 10)]))
+    expect(plan.pullFiles).toEqual(['a.pdf'])
+    expect(plan.conflicts).toEqual([])
   })
 
   it('pulls metadata only when content matches but remote meta is newer', () => {

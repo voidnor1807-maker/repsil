@@ -84,5 +84,37 @@
     "dateMdy": "Month / Day",
     "pdfOcrMaxPages": "PDF OCR page limit",
     "lightModeWarning": "Light mode is wired in but the color palette is unfinished — expect rough edges until Phase 3 polish."
+  },
+  "folder": {
+    "enableOcr": "Enable OCR for new files",
+    "localOnly": "Don't sync (local only)"
+  },
+  "sync": {
+    "title": "Sync over LAN",
+    "tab": "Sync",
+    "deviceName": "This device's name",
+    "host": "Host",
+    "join": "Join",
+    "startHosting": "Start hosting",
+    "stopHosting": "Stop hosting",
+    "hostingHint": "Share this code with another device on the same network. Anyone with the code can sync this archive.",
+    "code": "Sync code",
+    "copy": "Copy",
+    "copied": "Copied",
+    "joinHint": "Paste a code shared by the hosting device to connect.",
+    "codePlaceholder": "Paste sync code…",
+    "connect": "Connect",
+    "leave": "Disconnect",
+    "peers": "Connected devices",
+    "noPeers": "No devices connected yet.",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "statusIdle": "Sync off",
+    "statusHosting": "Hosting",
+    "statusJoined": "Connected",
+    "syncing_one": "Syncing 1 device",
+    "syncing_other": "Syncing {{count}} devices",
+    "needArchive": "Open an archive before syncing.",
+    "mismatch": "These are different archives — sync was aborted to avoid mixing unrelated collections."
   }
 }

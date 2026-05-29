@@ -6,6 +6,7 @@ import type { DocumentRow } from '../db/queries'
 import { enqueueExtraction } from '../extraction/queue'
 import { inheritsFolderFlag } from '../folders'
 import { recordDeletion } from '../renameTracker'
+import { emitDeleted, emitFileChanged } from '../sync/bus'
 import { extOf, isIgnoredRel, toRel } from './paths'
 import { reconcile } from './reconcile'
 
@@ -60,6 +61,9 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
           size_bytes: st.size
         })
         enqueueExtraction(existing.id)
+        // Real local change → push to peers. Files written by sync match the
+        // stored mtime/size, hit neither branch, and are not re-broadcast.
+        emitFileChanged(rel)
       }
     } else {
       const info = repsil.queries.insertDocument.run({
@@ -75,6 +79,7 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
         repsil.queries.setOcrRequested.run(id)
       }
       enqueueExtraction(id)
+      emitFileChanged(rel)
     }
   }
 
@@ -96,8 +101,19 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
         notes: row.notes,
         user_edited_fields: row.user_edited_fields
       })
+      // Record a tombstone so the delete propagates to peers, and push it live.
+      const deletedAt = Date.now()
+      repsil.queries.insertTombstone.run({
+        rel_path: rel,
+        content_hash: row.content_hash,
+        deleted_at: deletedAt,
+        device: null
+      })
+      repsil.queries.deleteDocumentByRelPath.run(rel)
+      emitDeleted(rel, row.content_hash, deletedAt)
+    } else {
+      repsil.queries.deleteDocumentByRelPath.run(rel)
     }
-    repsil.queries.deleteDocumentByRelPath.run(rel)
   })
   watcher.on('error', (err) => {
     console.error('Watcher error:', err)

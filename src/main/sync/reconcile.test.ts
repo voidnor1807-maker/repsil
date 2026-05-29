@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { RepsilDb } from '../db'
 import { SyncEngine } from './engine'
+import { emitFileChanged } from './bus'
 import { connectPsk, createPskServer } from './tls'
 import { randomBytes } from 'node:crypto'
 
@@ -30,7 +31,10 @@ class FakeArchive {
   rootPath: string
   docs = new Map<string, Row>()
   tombs = new Map<string, { rel_path: string; content_hash: string | null; deleted_at: number }>()
+  tags = new Map<string, number>()
+  links: { document_id: number; tag_id: number }[] = []
   private nextId = 1
+  private nextTagId = 1
 
   constructor(
     public archiveId: string,
@@ -124,6 +128,19 @@ class FakeArchive {
       insertTombstone: {
         run: (t: { rel_path: string; content_hash: string | null; deleted_at: number }) =>
           void this.tombs.set(t.rel_path, t)
+      },
+      upsertTag: {
+        get: (name: string) => {
+          let id = this.tags.get(name)
+          if (id === undefined) {
+            id = this.nextTagId++
+            this.tags.set(name, id)
+          }
+          return { id }
+        }
+      },
+      linkTag: {
+        run: (l: { document_id: number; tag_id: number }) => void this.links.push(l)
       }
     }
     return { rootPath: this.rootPath, dbPath: '', db: {} as never, archiveId: this.archiveId, queries: q as never }
@@ -191,6 +208,79 @@ describe('one-shot reconcile (localhost)', () => {
 
     await waitFor(() => !existsSync(join(clientArc.rootPath, 'old.txt')) && !clientArc.docs.has('old.txt'))
     expect(clientArc.docs.has('old.txt')).toBe(false)
+
+    socket.destroy()
+    await server.close()
+  })
+})
+
+describe('continuous live sync (localhost)', () => {
+  it('pushes a new local file to a connected peer in real time', async () => {
+    const hostArc = new FakeArchive('arc-shared', tempDirs)
+    const clientArc = new FakeArchive('arc-shared', tempDirs)
+
+    let hostReady!: () => void
+    let clientReady!: () => void
+    const ready = Promise.all([
+      new Promise<void>((r) => (hostReady = r)),
+      new Promise<void>((r) => (clientReady = r))
+    ])
+
+    const server = await createPskServer(PSK, (socket) => {
+      new SyncEngine(socket, hostArc.asRepsil(), { deviceId: 'h', deviceName: 'Host' }, {
+        onReady: () => hostReady()
+      }).start()
+    })
+    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    new SyncEngine(socket, clientArc.asRepsil(), { deviceId: 'c', deviceName: 'Client' }, {
+      onReady: () => clientReady()
+    }).start()
+
+    await ready
+
+    // A new file appears locally on the host after the connection is live.
+    hostArc.addFile('live.txt', 'fresh', { content_hash: 'hash-fresh' })
+    emitFileChanged('live.txt')
+
+    await waitFor(
+      () => existsSync(join(clientArc.rootPath, 'live.txt')) && clientArc.docs.has('live.txt')
+    )
+    expect(readFileSync(join(clientArc.rootPath, 'live.txt'), 'utf-8')).toBe('fresh')
+
+    socket.destroy()
+    await server.close()
+  })
+})
+
+describe('conflict preservation (localhost)', () => {
+  it('keeps the losing copy as a conflict-tagged sibling, winner stays canonical', async () => {
+    const hostArc = new FakeArchive('arc-shared', tempDirs)
+    hostArc.addFile('doc.txt', 'host wins', { content_hash: 'hash-host', mtime: 20 })
+
+    const clientArc = new FakeArchive('arc-shared', tempDirs)
+    clientArc.addFile('doc.txt', 'client loses', { content_hash: 'hash-client', mtime: 10 })
+
+    const server = await createPskServer(PSK, (socket) => {
+      new SyncEngine(socket, hostArc.asRepsil(), { deviceId: 'h', deviceName: 'Host' }).start()
+    })
+    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    new SyncEngine(socket, clientArc.asRepsil(), { deviceId: 'c', deviceName: 'Client' }).start()
+
+    // Wait until the client has taken the winner AND created a conflict sibling.
+    await waitFor(() => {
+      const canonical = existsSync(join(clientArc.rootPath, 'doc.txt'))
+        ? readFileSync(join(clientArc.rootPath, 'doc.txt'), 'utf-8')
+        : ''
+      const sibling = [...clientArc.docs.keys()].find((k) => /\.conflict-/.test(k))
+      return canonical === 'host wins' && sibling !== undefined
+    })
+
+    const siblingPath = [...clientArc.docs.keys()].find((k) => /\.conflict-/.test(k))!
+    expect(readFileSync(join(clientArc.rootPath, siblingPath), 'utf-8')).toBe('client loses')
+    // the sibling was tagged 'conflict'
+    const conflictTagId = clientArc.tags.get('conflict')
+    expect(conflictTagId).toBeDefined()
+    expect(clientArc.links.some((l) => l.tag_id === conflictTagId)).toBe(true)
 
     socket.destroy()
     await server.close()

@@ -90,6 +90,14 @@ export async function applyIncomingFile(
   if (!safe) return
   await fs.mkdir(dirname(safe), { recursive: true })
   await fs.writeFile(safe, Buffer.from(msg.dataB64, 'base64'))
+  // Align the written file's mtime with the sender's so manifests match across
+  // devices (avoids a spurious content-conflict re-pull on the next reconcile).
+  try {
+    const t = new Date(msg.mtime)
+    await fs.utimes(safe, t, t)
+  } catch {
+    // best-effort
+  }
   const st = await fs.stat(safe)
 
   const existing = repsil.queries.getDocumentByRelPath.get(msg.rel_path) as DocumentRow | undefined
@@ -114,6 +122,65 @@ export async function applyIncomingFile(
 
   const row = repsil.queries.getDocumentByRelPath.get(msg.rel_path) as DocumentRow | undefined
   if (row) enqueue(row.id)
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+/** `name.conflict-<device>-<YYYYMMDD-HHMM>.ext` sibling path. */
+export function conflictSiblingRel(rel: string, deviceName: string, now = new Date()): string {
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+  const safeDevice = deviceName.replace(/[^\w.-]/g, '_') || 'device'
+  const slash = rel.lastIndexOf('/')
+  const dot = rel.lastIndexOf('.')
+  const suffix = `.conflict-${safeDevice}-${stamp}`
+  if (dot <= slash) return `${rel}${suffix}`
+  return `${rel.slice(0, dot)}${suffix}${rel.slice(dot)}`
+}
+
+/**
+ * Preserve the local (losing) copy of a file before a remote winner overwrites
+ * it: copy it to a sibling path and tag it `conflict`. No data is lost.
+ */
+export async function preserveConflict(
+  repsil: RepsilDb,
+  relPath: string,
+  deviceName: string,
+  enqueue: (id: number) => void
+): Promise<void> {
+  const safe = resolveInsideArchive(repsil.rootPath, relPath)
+  if (!safe) return
+  let data: Buffer
+  try {
+    data = await fs.readFile(safe)
+  } catch {
+    return // nothing on disk to preserve
+  }
+
+  const siblingRel = conflictSiblingRel(relPath, deviceName)
+  const safeSibling = resolveInsideArchive(repsil.rootPath, siblingRel)
+  if (!safeSibling) return
+  await fs.writeFile(safeSibling, data)
+  const st = await fs.stat(safeSibling)
+
+  if (!repsil.queries.getDocumentByRelPath.get(siblingRel)) {
+    repsil.queries.insertDocument.run({
+      rel_path: siblingRel,
+      filename: basename(siblingRel),
+      ext: extOf(siblingRel),
+      size_bytes: st.size,
+      mtime: st.mtimeMs,
+      ctime: st.ctimeMs
+    })
+  }
+  const row = repsil.queries.getDocumentByRelPath.get(siblingRel) as DocumentRow | undefined
+  if (!row) return
+  const tag = repsil.queries.upsertTag.get('conflict') as { id: number }
+  repsil.queries.linkTag.run({ document_id: row.id, tag_id: tag.id })
+  enqueue(row.id)
 }
 
 /** Delete a file locally because a peer deleted it more recently. */

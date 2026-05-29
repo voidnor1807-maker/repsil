@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, FileText, Loader2, Settings, Tag as TagIcon, AlertCircle } from 'lucide-react'
+import { Search, FileText, Loader2, Settings, Tag as TagIcon, AlertCircle, Wifi } from 'lucide-react'
 import { WorkShell } from '@renderer/components/layout/WorkShell'
 import { FolderTree } from '@renderer/components/FolderTree'
 import { SearchFilters } from '@renderer/components/SearchFilters'
@@ -13,12 +13,16 @@ const DocumentView = React.lazy(() =>
 const SettingsSheet = React.lazy(() =>
   import('@renderer/components/SettingsSheet').then((m) => ({ default: m.SettingsSheet }))
 )
+const SyncSheet = React.lazy(() =>
+  import('@renderer/components/SyncSheet').then((m) => ({ default: m.SyncSheet }))
+)
 import type {
   AppSettings,
   ExtractionQueueStatus,
   FolderNode,
   SearchFilters as Filters,
   SearchResult,
+  SyncStatus,
   TagWithUsage
 } from '@shared/types'
 
@@ -41,6 +45,8 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   const [queueStatus, setQueueStatus] = React.useState<ExtractionQueueStatus | null>(null)
   const [selectedId, setSelectedId] = React.useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const [syncOpen, setSyncOpen] = React.useState(false)
+  const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null)
   const [tagsByDoc, setTagsByDoc] = React.useState<Record<number, string[]>>({})
   const [hasMore, setHasMore] = React.useState(false)
 
@@ -114,6 +120,19 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     void reloadTags()
   }, [reloadTree, reloadTags])
 
+  // Live sync status for the status-bar indicator.
+  React.useEffect(() => {
+    let alive = true
+    void window.repsil.sync.status().then((s) => {
+      if (alive) setSyncStatus(s)
+    })
+    const off = window.repsil.sync.onChanged((s) => setSyncStatus(s))
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
+
   // Poll queue status on a steady cadence for as long as the dashboard is
   // mounted. The self-scheduling guard checks `cancelled` BEFORE arming the
   // next timer, so an in-flight tick can't leak a timer the cleanup misses
@@ -176,12 +195,8 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
                   root={folderTree}
                   selectedRel={selectedFolder}
                   onSelect={setSelectedFolder}
-                  onToggleOcrDefault={async (rel, current) => {
-                    await window.repsil.folderSettings.set({
-                      rel_path: rel,
-                      ocr_default: !current,
-                      local_only: false
-                    })
+                  onSetFolderSettings={async (s) => {
+                    await window.repsil.folderSettings.set(s)
                     await reloadTree()
                   }}
                 />
@@ -213,6 +228,20 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
             />
             <button
               type="button"
+              onClick={() => setSyncOpen(true)}
+              className={cn(
+                'relative rounded-md border border-border bg-bg-elevated/60 p-2 hover:text-fg',
+                syncStatus && syncStatus.role !== 'idle' ? 'text-accent' : 'text-fg-muted'
+              )}
+              aria-label={t('sync.title')}
+            >
+              <Wifi className="h-4 w-4" />
+              {syncStatus && syncStatus.role !== 'idle' && (
+                <span className="absolute -end-0.5 -top-0.5 h-2 w-2 rounded-full bg-accent" />
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setSettingsOpen(true)}
               className="rounded-md border border-border bg-bg-elevated/60 p-2 text-fg-muted hover:text-fg"
               aria-label={t('settings.title')}
@@ -227,7 +256,10 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
               {settings.rootPath}
               {selectedFolder && <span className="text-fg"> / {selectedFolder}</span>}
             </span>
-            <QueueIndicator status={queueStatus} />
+            <div className="flex items-center gap-3">
+              <SyncIndicator status={syncStatus} />
+              <QueueIndicator status={queueStatus} />
+            </div>
           </div>
         }
       >
@@ -279,7 +311,33 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
           />
         </React.Suspense>
       )}
+      {syncOpen && (
+        <React.Suspense fallback={null}>
+          <SyncSheet
+            open={syncOpen}
+            onOpenChange={setSyncOpen}
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+          />
+        </React.Suspense>
+      )}
     </>
+  )
+}
+
+function SyncIndicator({ status }: { status: SyncStatus | null }): JSX.Element {
+  const { t } = useTranslation()
+  if (!status || status.role === 'idle') return <span />
+  const connected = status.peers.filter((p) => p.connected).length
+  return (
+    <span className="inline-flex items-center gap-1.5 text-accent">
+      <Wifi className="h-3 w-3" />
+      {connected > 0
+        ? t('sync.syncing', { count: connected })
+        : status.role === 'hosting'
+          ? t('sync.statusHosting')
+          : t('sync.statusJoined')}
+    </span>
   )
 }
 

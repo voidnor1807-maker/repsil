@@ -64,6 +64,14 @@ function attachEngine(socket: TLSSocket): SyncEngine {
         }
       }
       changed()
+    },
+    onApplied: (msg) => {
+      // Star relay: a change applied from one peer is forwarded to the other
+      // connected peers (the host is the only node with >1 engine, so joiners
+      // never relay — preventing broadcast loops).
+      for (const other of engines) {
+        if (other !== engine) other.send(msg)
+      }
     }
   })
   engines.add(engine)

@@ -2,7 +2,15 @@ import type { TLSSocket } from 'node:tls'
 import type { RepsilDb } from '../db'
 import { setArchiveId } from '../db'
 import { enqueueExtraction } from '../extraction/queue'
-import { applyIncomingFile, applyIncomingMeta, applyTombstone, metaMessageFor, readForSync } from './apply'
+import {
+  applyIncomingFile,
+  applyIncomingMeta,
+  applyTombstone,
+  metaMessageFor,
+  preserveConflict,
+  readForSync
+} from './apply'
+import { onDeleted, onFileChanged, onMetaChanged } from './bus'
 import { ARCHIVE_MISMATCH_MESSAGE, evaluateArchiveMatch } from './guard'
 import type { DeviceIdentity } from './identity'
 import { buildManifest, diffManifests } from './manifest'
@@ -20,6 +28,8 @@ export interface EngineCallbacks {
   onError?: (message: string) => void
   /** Socket closed for any reason. */
   onClose?: (peer: EnginePeer | null) => void
+  /** A delta from this peer was applied locally — used for host relay. */
+  onApplied?: (msg: SyncMessage) => void
 }
 
 /**
@@ -32,6 +42,7 @@ export class SyncEngine {
   private peer: EnginePeer | null = null
   private ready = false
   private closed = false
+  private unsubs: (() => void)[] = []
 
   constructor(
     private socket: TLSSocket,
@@ -67,6 +78,7 @@ export class SyncEngine {
   close(): void {
     if (this.closed) return
     this.closed = true
+    this.unsubscribeLocalChanges()
     try {
       this.socket.destroy()
     } catch {
@@ -100,17 +112,18 @@ export class SyncEngine {
         void this.onNeed(msg)
         break
       case 'file':
-        void applyIncomingFile(this.repsil, msg, enqueueExtraction).catch((err) =>
-          console.error('sync: applyIncomingFile failed:', err)
-        )
+        void applyIncomingFile(this.repsil, msg, enqueueExtraction)
+          .then(() => this.cb.onApplied?.(msg))
+          .catch((err) => console.error('sync: applyIncomingFile failed:', err))
         break
       case 'meta':
         applyIncomingMeta(this.repsil, msg.rel_path, msg.meta)
+        this.cb.onApplied?.(msg)
         break
       case 'tombstone':
-        void applyTombstone(this.repsil, msg.rel_path, msg.content_hash, msg.deleted_at).catch(
-          (err) => console.error('sync: applyTombstone failed:', err)
-        )
+        void applyTombstone(this.repsil, msg.rel_path, msg.content_hash, msg.deleted_at)
+          .then(() => this.cb.onApplied?.(msg))
+          .catch((err) => console.error('sync: applyTombstone failed:', err))
         break
       case 'ping':
         break
@@ -144,7 +157,30 @@ export class SyncEngine {
       })
       this.cb.onReady?.(this.peer)
       this.beginReconcile()
+      this.subscribeLocalChanges()
     }
+  }
+
+  /** Push local edits to this peer as they happen (continuous sync). */
+  private subscribeLocalChanges(): void {
+    this.unsubs.push(
+      onFileChanged((rel) => {
+        void readForSync(this.repsil, rel).then((m) => {
+          if (m) this.send(m)
+        })
+      }),
+      onMetaChanged((rel) => {
+        const m = metaMessageFor(this.repsil, rel)
+        if (m) this.send(m)
+      }),
+      onDeleted((rel, hash, at) => {
+        this.send({ t: 'tombstone', rel_path: rel, content_hash: hash, deleted_at: at })
+      })
+    )
+  }
+
+  private unsubscribeLocalChanges(): void {
+    for (const off of this.unsubs.splice(0)) off()
   }
 
   /** Kick off the initial reconcile by advertising our manifest. */
@@ -162,7 +198,18 @@ export class SyncEngine {
         console.error('sync: delete-local failed:', err)
       )
     }
-    this.send({ t: 'need', files: plan.pullFiles, metaOnly: plan.pullMeta })
+
+    // Preserve our losing copies BEFORE requesting the winners (which overwrite
+    // them). Wait for preservation, then ask for the files.
+    void Promise.all(
+      plan.conflicts.map((rel) =>
+        preserveConflict(this.repsil, rel, this.identity.deviceName, enqueueExtraction).catch(
+          (err) => console.error('sync: preserveConflict failed:', err)
+        )
+      )
+    ).finally(() => {
+      this.send({ t: 'need', files: plan.pullFiles, metaOnly: plan.pullMeta })
+    })
   }
 
   private async onNeed(msg: Extract<SyncMessage, { t: 'need' }>): Promise<void> {
@@ -190,11 +237,8 @@ export class SyncEngine {
   }
 
   private handleClose(): void {
-    if (this.closed) {
-      this.cb.onClose?.(this.peer)
-      return
-    }
-    this.closed = true
+    this.unsubscribeLocalChanges()
+    if (!this.closed) this.closed = true
     this.cb.onClose?.(this.peer)
   }
 }

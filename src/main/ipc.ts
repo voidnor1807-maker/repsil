@@ -8,6 +8,7 @@ import {
   stopSync,
   syncStatus
 } from './sync/manager'
+import { emitMetaChanged } from './sync/bus'
 import type {
   AppSettings,
   DbStatus,
@@ -132,6 +133,7 @@ export function registerIpcHandlers(): void {
         meta_updated_at: Date.now(),
         last_writer: getSettings().deviceId
       })
+      emitMetaChanged(row.rel_path)
       return (current.queries.getDocumentById.get(id) as DocumentRow | undefined) ?? null
     }
   )
@@ -283,6 +285,8 @@ export function registerIpcHandlers(): void {
         })
       })
       tx()
+      const doc = current.queries.getDocumentById.get(id) as DocumentRow | undefined
+      if (doc) emitMetaChanged(doc.rel_path)
       return current.queries.getTagsForDocument.all(id) as Tag[]
     }
   )

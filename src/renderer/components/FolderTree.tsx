@@ -1,22 +1,23 @@
 import * as React from 'react'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, Folder, FolderOpen, Check, MoreVertical } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
-import type { FolderNode } from '@shared/types'
+import type { FolderNode, FolderSettings } from '@shared/types'
 
 interface FolderTreeProps {
   root: FolderNode
   selectedRel: string | null
   onSelect: (rel: string) => void
-  onToggleOcrDefault: (rel: string, current: boolean) => void
+  onSetFolderSettings: (settings: FolderSettings) => void
 }
 
 export function FolderTree({
   root,
   selectedRel,
   onSelect,
-  onToggleOcrDefault
+  onSetFolderSettings
 }: FolderTreeProps): JSX.Element {
   return (
     <div className="select-none overflow-auto py-2 text-w-small">
@@ -26,7 +27,7 @@ export function FolderTree({
         labelOverride="/"
         selectedRel={selectedRel}
         onSelect={onSelect}
-        onToggleOcrDefault={onToggleOcrDefault}
+        onSetFolderSettings={onSetFolderSettings}
         defaultOpen
       />
     </div>
@@ -39,7 +40,7 @@ interface FolderRowProps {
   labelOverride?: string
   selectedRel: string | null
   onSelect: (rel: string) => void
-  onToggleOcrDefault: (rel: string, current: boolean) => void
+  onSetFolderSettings: (settings: FolderSettings) => void
   defaultOpen?: boolean
 }
 
@@ -49,9 +50,22 @@ function FolderRow({
   labelOverride,
   selectedRel,
   onSelect,
-  onToggleOcrDefault,
+  onSetFolderSettings,
   defaultOpen
 }: FolderRowProps): JSX.Element {
+  const { t } = useTranslation()
+  const toggleOcr = (): void =>
+    onSetFolderSettings({
+      rel_path: node.rel_path,
+      ocr_default: !node.ocr_default,
+      local_only: node.local_only
+    })
+  const toggleLocalOnly = (): void =>
+    onSetFolderSettings({
+      rel_path: node.rel_path,
+      ocr_default: node.ocr_default,
+      local_only: !node.local_only
+    })
   const [open, setOpen] = React.useState(defaultOpen ?? depth < 1)
   const selected = selectedRel === node.rel_path
   const hasChildren = node.children.length > 0
@@ -101,10 +115,18 @@ function FolderRow({
             </span>
             {node.ocr_default && (
               <span
-                title="OCR enabled for new files"
+                title={t('folder.enableOcr')}
                 className="shrink-0 rounded-pill bg-accent/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-accent"
               >
                 OCR
+              </span>
+            )}
+            {node.local_only && (
+              <span
+                title={t('folder.localOnly')}
+                className="shrink-0 rounded-pill bg-fg-muted/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fg-muted"
+              >
+                LOCAL
               </span>
             )}
             <DropdownMenu.Root>
@@ -121,16 +143,25 @@ function FolderRow({
               <DropdownMenu.Portal>
                 <DropdownMenu.Content
                   align="end"
-                  className="z-50 min-w-[12rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft"
+                  className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft"
                 >
                   <DropdownMenu.Item
-                    onSelect={() => onToggleOcrDefault(node.rel_path, node.ocr_default)}
+                    onSelect={toggleOcr}
                     className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
                   >
                     <span className="inline-flex h-3 w-3 items-center justify-center">
                       {node.ocr_default && <Check className="h-3 w-3 text-accent" />}
                     </span>
-                    Enable OCR for new files
+                    {t('folder.enableOcr')}
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onSelect={toggleLocalOnly}
+                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                  >
+                    <span className="inline-flex h-3 w-3 items-center justify-center">
+                      {node.local_only && <Check className="h-3 w-3 text-accent" />}
+                    </span>
+                    {t('folder.localOnly')}
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
@@ -138,15 +169,24 @@ function FolderRow({
           </div>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenu.Content className="z-50 min-w-[12rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft">
+          <ContextMenu.Content className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft">
             <ContextMenu.Item
-              onSelect={() => onToggleOcrDefault(node.rel_path, node.ocr_default)}
+              onSelect={toggleOcr}
               className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
             >
               <span className="inline-flex h-3 w-3 items-center justify-center">
                 {node.ocr_default && <Check className="h-3 w-3 text-accent" />}
               </span>
-              Enable OCR for new files
+              {t('folder.enableOcr')}
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              onSelect={toggleLocalOnly}
+              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+            >
+              <span className="inline-flex h-3 w-3 items-center justify-center">
+                {node.local_only && <Check className="h-3 w-3 text-accent" />}
+              </span>
+              {t('folder.localOnly')}
             </ContextMenu.Item>
           </ContextMenu.Content>
         </ContextMenu.Portal>
@@ -160,7 +200,7 @@ function FolderRow({
               depth={depth + 1}
               selectedRel={selectedRel}
               onSelect={onSelect}
-              onToggleOcrDefault={onToggleOcrDefault}
+              onSetFolderSettings={onSetFolderSettings}
             />
           ))}
         </div>
