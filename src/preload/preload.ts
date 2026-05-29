@@ -8,10 +8,13 @@ import type {
   ExtractionQueueStatus,
   FolderNode,
   FolderSettings,
+  HostResult,
+  JoinResult,
   PickFolderResult,
   SearchFilters,
   SearchOptions,
   SearchResult,
+  SyncStatus,
   Tag,
   TagWithUsage
 } from '@shared/types'
@@ -71,6 +74,20 @@ const api = {
   },
   extraction: {
     status: (): Promise<ExtractionQueueStatus> => ipcRenderer.invoke('extraction:status')
+  },
+  sync: {
+    host: (): Promise<HostResult> => ipcRenderer.invoke('sync:host'),
+    join: (code: string): Promise<JoinResult> => ipcRenderer.invoke('sync:join', code),
+    stop: (): Promise<void> => ipcRenderer.invoke('sync:stop'),
+    status: (): Promise<SyncStatus> => ipcRenderer.invoke('sync:status'),
+    setDeviceName: (name: string): Promise<AppSettings> =>
+      ipcRenderer.invoke('sync:setDeviceName', name),
+    /** Subscribe to live status pushes; returns an unsubscribe function. */
+    onChanged: (cb: (status: SyncStatus) => void): (() => void) => {
+      const listener = (_evt: unknown, status: SyncStatus): void => cb(status)
+      ipcRenderer.on('sync:changed', listener)
+      return () => ipcRenderer.removeListener('sync:changed', listener)
+    }
   }
 }
 

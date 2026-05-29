@@ -1,5 +1,7 @@
 import { app } from 'electron'
 import { promises as fs } from 'node:fs'
+import { hostname } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { AppSettings, DateFormat } from '@shared/types'
 import { getDb } from './db'
@@ -10,7 +12,9 @@ const DEFAULTS: AppSettings = {
   dateFormat: 'dmy',
   pdfOcrMaxPages: 200,
   rootPath: null,
-  firstRunComplete: false
+  firstRunComplete: false,
+  deviceId: '',
+  deviceName: ''
 }
 
 /**
@@ -37,6 +41,23 @@ export async function loadSettings(): Promise<AppSettings> {
     cached = { ...DEFAULTS, ...parsed }
   } catch {
     cached = { ...DEFAULTS }
+  }
+  // Generate a stable machine identity on first run and persist it.
+  let mutated = false
+  if (!cached.deviceId) {
+    cached.deviceId = randomUUID()
+    mutated = true
+  }
+  if (!cached.deviceName) {
+    cached.deviceName = hostname() || 'Repsil device'
+    mutated = true
+  }
+  if (mutated) {
+    try {
+      await fs.writeFile(file(), JSON.stringify(cached, null, 2), 'utf-8')
+    } catch {
+      // best-effort; identity will regenerate next run if this fails
+    }
   }
   return cached
 }

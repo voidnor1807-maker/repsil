@@ -1,16 +1,26 @@
 import { ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { statSync } from 'node:fs'
 import { resolveInsideArchive } from './pathSafety'
+import {
+  joinSession,
+  onSyncChange,
+  startHosting,
+  stopSync,
+  syncStatus
+} from './sync/manager'
 import type {
   AppSettings,
   DbStatus,
   DocumentMetadataPatch,
   FolderNode,
   FolderSettings,
+  HostResult,
+  JoinResult,
   PickFolderResult,
   SearchFilters,
   SearchOptions,
   SearchResult,
+  SyncStatus,
   Tag,
   TagWithUsage,
   UserEditableField
@@ -118,7 +128,9 @@ export function registerIpcHandlers(): void {
         doc_date: merged.doc_date,
         source: merged.source,
         notes: merged.notes,
-        user_edited_fields: JSON.stringify([...edited])
+        user_edited_fields: JSON.stringify([...edited]),
+        meta_updated_at: Date.now(),
+        last_writer: getSettings().deviceId
       })
       return (current.queries.getDocumentById.get(id) as DocumentRow | undefined) ?? null
     }
@@ -263,6 +275,12 @@ export function registerIpcHandlers(): void {
           current.queries.linkTag.run({ document_id: id, tag_id: tagId })
         }
         current.queries.pruneUnusedTags.run()
+        // Tags are part of a document's curated state — bump its sync clock.
+        current.queries.touchMeta.run({
+          id,
+          meta_updated_at: Date.now(),
+          last_writer: getSettings().deviceId
+        })
       })
       tx()
       return current.queries.getTagsForDocument.all(id) as Tag[]
@@ -283,6 +301,45 @@ export function registerIpcHandlers(): void {
       schemaVersion,
       documentCount
     }
+  })
+
+  // --- Phase 2: LAN sync ---
+
+  // Push status changes (peer connect/disconnect, errors) to every window.
+  onSyncChange(() => {
+    const status = syncStatus()
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('sync:changed', status)
+    }
+  })
+
+  ipcMain.handle('sync:host', async (): Promise<HostResult> => {
+    try {
+      const { code } = await startHosting()
+      return { ok: true, code, error: null }
+    } catch (err) {
+      return { ok: false, code: null, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('sync:join', async (_evt, code: string): Promise<JoinResult> => {
+    try {
+      await joinSession(code)
+      return { ok: true, error: null }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('sync:stop', async (): Promise<void> => {
+    await stopSync()
+  })
+
+  ipcMain.handle('sync:status', (): SyncStatus => syncStatus())
+
+  ipcMain.handle('sync:setDeviceName', async (_evt, name: string): Promise<AppSettings> => {
+    const trimmed = name.trim()
+    return updateSettings({ deviceName: trimmed || getSettings().deviceName })
   })
 }
 

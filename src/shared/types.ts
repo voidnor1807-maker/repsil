@@ -9,6 +9,10 @@ export interface AppSettings {
   pdfOcrMaxPages: number
   rootPath: string | null
   firstRunComplete: boolean
+  /** Stable per-machine identity for LAN sync (generated once). */
+  deviceId: string
+  /** Human-friendly name shown to sync peers (defaults to hostname). */
+  deviceName: string
 }
 
 export interface PickFolderResult {
@@ -118,4 +122,44 @@ export interface SearchResult {
   snippet: string
   extraction_status: ExtractionStatus
   error_message: string | null
+}
+
+// --- Phase 2: LAN sync ---
+
+export type SyncRole = 'idle' | 'hosting' | 'joined'
+
+export interface SyncPeer {
+  deviceId: string
+  name: string
+  /** Set when a connection is currently live. */
+  connected: boolean
+  lastSeen: number | null
+}
+
+export interface SyncProgress {
+  /** Files/metadata items still to transfer in the current reconcile. */
+  pending: number
+  /** Items transferred since this connection opened. */
+  done: number
+}
+
+export interface SyncStatus {
+  role: SyncRole
+  /** The shareable join code while hosting; null otherwise. */
+  code: string | null
+  peers: SyncPeer[]
+  progress: SyncProgress
+  /** Last human-readable error (e.g. archive mismatch), if any. */
+  error: string | null
+}
+
+export interface HostResult {
+  ok: boolean
+  code: string | null
+  error: string | null
+}
+
+export interface JoinResult {
+  ok: boolean
+  error: string | null
 }

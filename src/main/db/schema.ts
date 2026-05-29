@@ -91,8 +91,31 @@ CREATE TABLE app_settings (
 );
 `
 
+// Phase 2 (LAN sync). meta_updated_at drives last-writer-wins on curated
+// metadata; last_writer records the originating device. tombstones let deletes
+// propagate instead of files resurrecting on the next sync. sync_peers backs
+// the UI peer list.
+const M4_SYNC = `
+ALTER TABLE documents ADD COLUMN meta_updated_at INTEGER;
+ALTER TABLE documents ADD COLUMN last_writer TEXT;
+
+CREATE TABLE tombstones (
+  rel_path     TEXT PRIMARY KEY,
+  content_hash TEXT,
+  deleted_at   INTEGER NOT NULL,
+  device       TEXT
+);
+
+CREATE TABLE sync_peers (
+  device_id  TEXT PRIMARY KEY,
+  name       TEXT,
+  last_seen  INTEGER
+);
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: M1_INITIAL },
   { version: 2, sql: M2_EXTRACTION_REPORTING },
-  { version: 3, sql: M3_APP_SETTINGS }
+  { version: 3, sql: M3_APP_SETTINGS },
+  { version: 4, sql: M4_SYNC }
 ]

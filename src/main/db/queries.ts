@@ -23,6 +23,24 @@ export interface DocumentRow {
   error_message: string | null
   ocr_pages_done: number | null
   ocr_pages_total: number | null
+  meta_updated_at: number | null
+  last_writer: string | null
+}
+
+/** One row of the sync manifest — the minimal shape peers exchange. */
+export interface ManifestEntry {
+  rel_path: string
+  content_hash: string | null
+  size_bytes: number
+  mtime: number
+  meta_updated_at: number | null
+}
+
+export interface TombstoneRow {
+  rel_path: string
+  content_hash: string | null
+  deleted_at: number
+  device: string | null
 }
 
 export interface NewDocument {
@@ -123,13 +141,25 @@ export function createQueries(db: Database.Database) {
       source: string | null
       notes: string | null
       user_edited_fields: string
+      meta_updated_at: number
+      last_writer: string | null
     }>(`
       UPDATE documents
          SET title = @title,
              doc_date = @doc_date,
              source = @source,
              notes = @notes,
-             user_edited_fields = @user_edited_fields
+             user_edited_fields = @user_edited_fields,
+             meta_updated_at = @meta_updated_at,
+             last_writer = @last_writer
+       WHERE id = @id
+    `),
+
+    // Bump the metadata clock without changing fields — used when tags change
+    // (tags live in their own table but are part of a document's curated state).
+    touchMeta: db.prepare<{ id: number; meta_updated_at: number; last_writer: string | null }>(`
+      UPDATE documents
+         SET meta_updated_at = @meta_updated_at, last_writer = @last_writer
        WHERE id = @id
     `),
 
@@ -239,6 +269,9 @@ export function createQueries(db: Database.Database) {
     listAppSettings: db.prepare<[], { key: string; value: string }>(
       `SELECT key, value FROM app_settings`
     ),
+    getAppSetting: db.prepare<string, { value: string }>(
+      `SELECT value FROM app_settings WHERE key = ?`
+    ),
     setAppSetting: db.prepare<{ key: string; value: string }>(`
       INSERT INTO app_settings (key, value) VALUES (@key, @value)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value
@@ -246,6 +279,78 @@ export function createQueries(db: Database.Database) {
 
     countDocuments: db.prepare<[], { n: number }>(
       `SELECT COUNT(*) AS n FROM documents`
+    ),
+
+    // --- Phase 2: LAN sync ---
+
+    // Full manifest of syncable documents. local_only filtering is applied in
+    // JS (manifest.ts) via inheritsFolderFlag, which walks the folder ancestry.
+    listForSync: db.prepare<[], ManifestEntry>(`
+      SELECT rel_path, content_hash, size_bytes, mtime, meta_updated_at
+        FROM documents
+       ORDER BY rel_path
+    `),
+
+    // Apply curated metadata arriving from a peer, keyed by rel_path. Only the
+    // synced fields are touched; extraction-derived columns stay local.
+    upsertSyncedMetadata: db.prepare<{
+      rel_path: string
+      title: string | null
+      doc_date: string | null
+      source: string | null
+      notes: string | null
+      user_edited_fields: string
+      meta_updated_at: number
+      last_writer: string | null
+    }>(`
+      UPDATE documents
+         SET title = @title,
+             doc_date = @doc_date,
+             source = @source,
+             notes = @notes,
+             user_edited_fields = @user_edited_fields,
+             meta_updated_at = @meta_updated_at,
+             last_writer = @last_writer
+       WHERE rel_path = @rel_path
+    `),
+
+    // Tombstones — propagate deletes across peers.
+    insertTombstone: db.prepare<{
+      rel_path: string
+      content_hash: string | null
+      deleted_at: number
+      device: string | null
+    }>(`
+      INSERT INTO tombstones (rel_path, content_hash, deleted_at, device)
+      VALUES (@rel_path, @content_hash, @deleted_at, @device)
+      ON CONFLICT(rel_path) DO UPDATE SET
+        content_hash = excluded.content_hash,
+        deleted_at = excluded.deleted_at,
+        device = excluded.device
+    `),
+    listTombstones: db.prepare<[], TombstoneRow>(
+      `SELECT rel_path, content_hash, deleted_at, device FROM tombstones`
+    ),
+    getTombstone: db.prepare<string, TombstoneRow>(
+      `SELECT rel_path, content_hash, deleted_at, device FROM tombstones WHERE rel_path = ?`
+    ),
+    deleteTombstone: db.prepare<string>(
+      `DELETE FROM tombstones WHERE rel_path = ?`
+    ),
+    pruneTombstones: db.prepare<number>(
+      `DELETE FROM tombstones WHERE deleted_at < ?`
+    ),
+
+    // Known peers (UI list).
+    upsertPeer: db.prepare<{ device_id: string; name: string | null; last_seen: number }>(`
+      INSERT INTO sync_peers (device_id, name, last_seen)
+      VALUES (@device_id, @name, @last_seen)
+      ON CONFLICT(device_id) DO UPDATE SET
+        name = excluded.name,
+        last_seen = excluded.last_seen
+    `),
+    listPeers: db.prepare<[], { device_id: string; name: string | null; last_seen: number }>(
+      `SELECT device_id, name, last_seen FROM sync_peers ORDER BY last_seen DESC`
     )
   }
 }

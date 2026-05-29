@@ -7,6 +7,7 @@ import { bindQueue, drainPending, unbindQueue } from './extraction/queue'
 import { terminateOcr } from './extraction/ocr'
 import { registerProtocolHandlers, registerProtocolSchemes } from './protocol'
 import { startWatcher, stopWatcher } from './watcher/fileWatcher'
+import { stopSync } from './sync/manager'
 
 registerProtocolSchemes()
 
@@ -83,6 +84,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', async (event) => {
   event.preventDefault()
+  await stopSync()
   await stopWatcher()
   unbindQueue()
   await terminateOcr()
