@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import type { RepsilDb } from '../db'
 import { SyncEngine } from './engine'
 import { emitFileChanged } from './bus'
-import { connectPsk, createPskServer } from './tls'
+import { connectSecure, createSecureServer } from './secureChannel'
 import { randomBytes } from 'node:crypto'
 
 interface Row {
@@ -176,10 +176,10 @@ describe('one-shot reconcile (localhost)', () => {
     })
     const clientArc = new FakeArchive('arc-shared', tempDirs)
 
-    const server = await createPskServer(PSK, (socket) => {
+    const server = await createSecureServer(PSK, (socket) => {
       new SyncEngine(socket, hostArc.asRepsil(), { deviceId: 'h', deviceName: 'Host' }).start()
     })
-    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    const socket = await connectSecure('127.0.0.1', server.port, PSK)
     new SyncEngine(socket, clientArc.asRepsil(), { deviceId: 'c', deviceName: 'Client' }).start()
 
     await waitFor(() => existsSync(join(clientArc.rootPath, 'note.txt')) && clientArc.docs.has('note.txt'))
@@ -200,10 +200,10 @@ describe('one-shot reconcile (localhost)', () => {
     mkdirSync(clientArc.rootPath, { recursive: true })
     clientArc.addFile('old.txt', 'stale', { mtime: 100 })
 
-    const server = await createPskServer(PSK, (socket) => {
+    const server = await createSecureServer(PSK, (socket) => {
       new SyncEngine(socket, hostArc.asRepsil(), { deviceId: 'h', deviceName: 'Host' }).start()
     })
-    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    const socket = await connectSecure('127.0.0.1', server.port, PSK)
     new SyncEngine(socket, clientArc.asRepsil(), { deviceId: 'c', deviceName: 'Client' }).start()
 
     await waitFor(() => !existsSync(join(clientArc.rootPath, 'old.txt')) && !clientArc.docs.has('old.txt'))
@@ -226,12 +226,12 @@ describe('continuous live sync (localhost)', () => {
       new Promise<void>((r) => (clientReady = r))
     ])
 
-    const server = await createPskServer(PSK, (socket) => {
+    const server = await createSecureServer(PSK, (socket) => {
       new SyncEngine(socket, hostArc.asRepsil(), { deviceId: 'h', deviceName: 'Host' }, {
         onReady: () => hostReady()
       }).start()
     })
-    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    const socket = await connectSecure('127.0.0.1', server.port, PSK)
     new SyncEngine(socket, clientArc.asRepsil(), { deviceId: 'c', deviceName: 'Client' }, {
       onReady: () => clientReady()
     }).start()
@@ -260,10 +260,10 @@ describe('conflict preservation (localhost)', () => {
     const clientArc = new FakeArchive('arc-shared', tempDirs)
     clientArc.addFile('doc.txt', 'client loses', { content_hash: 'hash-client', mtime: 10 })
 
-    const server = await createPskServer(PSK, (socket) => {
+    const server = await createSecureServer(PSK, (socket) => {
       new SyncEngine(socket, hostArc.asRepsil(), { deviceId: 'h', deviceName: 'Host' }).start()
     })
-    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    const socket = await connectSecure('127.0.0.1', server.port, PSK)
     new SyncEngine(socket, clientArc.asRepsil(), { deviceId: 'c', deviceName: 'Client' }).start()
 
     // Wait until the client has taken the winner AND created a conflict sibling.

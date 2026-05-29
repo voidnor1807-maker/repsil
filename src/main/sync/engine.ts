@@ -1,4 +1,4 @@
-import type { TLSSocket } from 'node:tls'
+import type { SecureChannel } from './secureChannel'
 import type { RepsilDb } from '../db'
 import { setArchiveId } from '../db'
 import { enqueueExtraction } from '../extraction/queue'
@@ -45,7 +45,7 @@ export class SyncEngine {
   private unsubs: (() => void)[] = []
 
   constructor(
-    private socket: TLSSocket,
+    private socket: SecureChannel,
     private repsil: RepsilDb,
     private identity: DeviceIdentity,
     private cb: EngineCallbacks = {}

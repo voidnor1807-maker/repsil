@@ -88,7 +88,7 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
       cancelled = true
       clearTimeout(timer)
     }
-  }, [query, effectiveFilters])
+  }, [query, effectiveFilters, settings.rootPath])
 
   const loadMore = async (): Promise<void> => {
     try {
@@ -116,9 +116,10 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   }, [])
 
   React.useEffect(() => {
+    setSelectedFolder('')
     void reloadTree()
     void reloadTags()
-  }, [reloadTree, reloadTags])
+  }, [reloadTree, reloadTags, settings.rootPath])
 
   // Live sync status for the status-bar indicator.
   React.useEffect(() => {

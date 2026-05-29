@@ -22,6 +22,7 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
   const [name, setName] = React.useState(settings.deviceName)
   const [busy, setBusy] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [localErr, setLocalErr] = React.useState<string | null>(null)
   const noArchive = !settings.rootPath
 
   React.useEffect(() => {
@@ -39,8 +40,10 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
 
   const startHosting = async (): Promise<void> => {
     setBusy(true)
+    setLocalErr(null)
     try {
-      await window.repsil.sync.host()
+      const res = await window.repsil.sync.host()
+      if (!res.ok) setLocalErr(res.error)
     } finally {
       setBusy(false)
     }
@@ -49,8 +52,10 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
   const join = async (): Promise<void> => {
     if (!code.trim()) return
     setBusy(true)
+    setLocalErr(null)
     try {
-      await window.repsil.sync.join(code.trim())
+      const res = await window.repsil.sync.join(code.trim())
+      if (!res.ok) setLocalErr(res.error)
     } finally {
       setBusy(false)
     }
@@ -218,9 +223,9 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
               </section>
             )}
 
-            {status.error && (
+            {(localErr || status.error) && (
               <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-w-small text-destructive">
-                {status.error}
+                {localErr || status.error}
               </p>
             )}
 

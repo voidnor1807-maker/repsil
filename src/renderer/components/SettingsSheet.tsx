@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useTranslation } from 'react-i18next'
-import { Moon, Sun, X } from 'lucide-react'
+import { FolderOpen, Moon, Sun, X } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import { setLanguage } from '@renderer/i18n'
 import { applyTheme } from '@renderer/theme/theme'
@@ -27,6 +27,12 @@ export function SettingsSheet({
     onSettingsChange(next)
     if (patch.language) setLanguage(patch.language)
     if (patch.theme) applyTheme(patch.theme)
+  }
+
+  const changeFolder = async (): Promise<void> => {
+    const res = await window.repsil.dialog.pickFolder()
+    if (res.canceled || !res.path) return
+    await update({ rootPath: res.path })
   }
 
   return (
@@ -59,9 +65,19 @@ export function SettingsSheet({
           <div className="space-y-6 p-4">
             <Section title={t('settings.archive')}>
               <Row label={t('settings.rootPath')}>
-                <span className="font-mono text-w-small text-fg-muted break-all">
-                  {settings.rootPath ?? '—'}
-                </span>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className="font-mono text-w-small text-fg-muted break-all">
+                    {settings.rootPath ?? '—'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void changeFolder()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-bg-elevated/60 px-2.5 py-1 text-w-small text-fg hover:border-accent-soft"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                    {t('settings.changeFolder')}
+                  </button>
+                </div>
               </Row>
             </Section>
 

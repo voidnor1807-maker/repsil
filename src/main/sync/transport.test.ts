@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { randomBytes } from 'node:crypto'
-import type { TLSSocket } from 'node:tls'
 import type { RepsilDb } from '../db'
 import { SyncEngine, type EnginePeer } from './engine'
-import { connectPsk, createPskServer } from './tls'
+import { connectSecure, createSecureServer, type SecureChannel } from './secureChannel'
 
 /**
  * Minimal stand-in for RepsilDb covering only what SyncEngine touches. We can't
@@ -40,8 +39,8 @@ async function host(repsil: RepsilDb, dev = identity('host-dev', 'Host')): Promi
   let onError!: (m: string) => void
   const hostReady = new Promise<EnginePeer>((r) => (onReady = r))
   const hostError = new Promise<string>((r) => (onError = r))
-  const server = await createPskServer(PSK, (socket: TLSSocket) => {
-    const eng = new SyncEngine(socket, repsil, dev, { onReady, onError })
+  const server = await createSecureServer(PSK, (channel: SecureChannel) => {
+    const eng = new SyncEngine(channel, repsil, dev, { onReady, onError })
     eng.start()
   })
   return { port: server.port, close: server.close, hostReady, hostError }
@@ -50,9 +49,9 @@ async function host(repsil: RepsilDb, dev = identity('host-dev', 'Host')): Promi
 const PSK = randomBytes(16)
 
 describe('sync transport + handshake (localhost)', () => {
-  it('connects over TLS-PSK and both sides reach ready when archives match', async () => {
+  it('connects over the encrypted channel and both sides reach ready when archives match', async () => {
     const server = await host(fakeRepsil('same-arc', false))
-    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    const socket = await connectSecure('127.0.0.1', server.port, PSK)
 
     const clientReady = new Promise<EnginePeer>((resolve) => {
       const eng = new SyncEngine(socket, fakeRepsil('same-arc', false), identity('c1', 'Client'), {
@@ -71,7 +70,7 @@ describe('sync transport + handshake (localhost)', () => {
 
   it('refuses to sync two established archives with different ids', async () => {
     const server = await host(fakeRepsil('archive-A', false))
-    const socket = await connectPsk('127.0.0.1', server.port, PSK)
+    const socket = await connectSecure('127.0.0.1', server.port, PSK)
 
     const clientError = new Promise<string>((resolve) => {
       const eng = new SyncEngine(socket, fakeRepsil('archive-B', false), identity('c2', 'Client'), {
@@ -89,7 +88,7 @@ describe('sync transport + handshake (localhost)', () => {
 
   it('rejects a connection presenting the wrong PSK', async () => {
     const server = await host(fakeRepsil('same-arc', false))
-    await expect(connectPsk('127.0.0.1', server.port, randomBytes(16))).rejects.toBeDefined()
+    await expect(connectSecure('127.0.0.1', server.port, randomBytes(16))).rejects.toBeDefined()
     await server.close()
   })
 })

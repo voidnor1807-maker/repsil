@@ -1,12 +1,11 @@
 import { randomBytes } from 'node:crypto'
-import type { TLSSocket } from 'node:tls'
 import type { SyncPeer, SyncProgress, SyncRole, SyncStatus } from '@shared/types'
 import { getDb } from '../db'
 import { decodeJoinCode, encodeJoinCode } from './code'
 import { SyncEngine } from './engine'
 import { getIdentity } from './identity'
 import { lanAddress } from './netinfo'
-import { connectPsk, createPskServer, type PskServer } from './tls'
+import { connectSecure, createSecureServer, type SecureChannel, type SecureServer } from './secureChannel'
 
 /**
  * Process-wide sync state. Star topology: a device either hosts (a PSK server
@@ -16,8 +15,8 @@ import { connectPsk, createPskServer, type PskServer } from './tls'
 let role: SyncRole = 'idle'
 let code: string | null = null
 let error: string | null = null
-let server: PskServer | null = null
-let clientSocket: TLSSocket | null = null
+let server: SecureServer | null = null
+let clientChannel: SecureChannel | null = null
 const engines = new Set<SyncEngine>()
 const peers = new Map<string, SyncPeer>()
 let progress: SyncProgress = { pending: 0, done: 0 }
@@ -35,11 +34,11 @@ export function syncStatus(): SyncStatus {
   return { role, code, peers: [...peers.values()], progress, error }
 }
 
-function attachEngine(socket: TLSSocket): SyncEngine {
+function attachEngine(channel: SecureChannel): SyncEngine {
   const repsil = getDb()
   if (!repsil) throw new Error('No archive open')
   const identity = getIdentity()
-  const engine = new SyncEngine(socket, repsil, identity, {
+  const engine = new SyncEngine(channel, repsil, identity, {
     onReady: (peer) => {
       peers.set(peer.deviceId, {
         deviceId: peer.deviceId,
@@ -85,15 +84,11 @@ export async function startHosting(): Promise<{ code: string }> {
   await stopSync()
 
   const psk = randomBytes(16)
-  server = await createPskServer(psk, (socket) => {
+  server = await createSecureServer(psk, (channel) => {
     try {
-      attachEngine(socket)
+      attachEngine(channel)
     } catch {
-      try {
-        socket.destroy()
-      } catch {
-        /* ignore */
-      }
+      channel.destroy()
     }
   })
   code = encodeJoinCode({ host: lanAddress(), port: server.port, psk })
@@ -110,11 +105,11 @@ export async function joinSession(rawCode: string): Promise<void> {
   if (!target) throw new Error('That code is invalid or corrupted')
 
   await stopSync()
-  const socket = await connectPsk(target.host, target.port, target.psk)
-  clientSocket = socket
+  const channel = await connectSecure(target.host, target.port, target.psk)
+  clientChannel = channel
   role = 'joined'
   error = null
-  attachEngine(socket)
+  attachEngine(channel)
   changed()
 }
 
@@ -125,13 +120,9 @@ export async function stopSync(): Promise<void> {
     await server.close()
     server = null
   }
-  if (clientSocket) {
-    try {
-      clientSocket.destroy()
-    } catch {
-      /* ignore */
-    }
-    clientSocket = null
+  if (clientChannel) {
+    clientChannel.destroy()
+    clientChannel = null
   }
   peers.clear()
   role = 'idle'
