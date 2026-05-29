@@ -159,6 +159,15 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     }
   }, [])
 
+  const availableExts = React.useMemo(() => {
+    const set = new Set<string>()
+    for (const r of results) {
+      const ext = r.filename.split('.').pop()?.toLowerCase()
+      if (ext) set.add(ext)
+    }
+    return [...set].sort()
+  }, [results])
+
   if (selectedId !== null) {
     return (
       <React.Suspense fallback={<div className="h-full w-full bg-bg" />}>
@@ -172,15 +181,6 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
       </React.Suspense>
     )
   }
-
-  const availableExts = React.useMemo(() => {
-    const set = new Set<string>()
-    for (const r of results) {
-      const ext = r.filename.split('.').pop()?.toLowerCase()
-      if (ext) set.add(ext)
-    }
-    return [...set].sort()
-  }, [results])
 
   return (
     <>

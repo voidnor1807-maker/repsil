@@ -15,7 +15,7 @@ import { Button } from '@renderer/components/ui/button'
 import { DirectionalIcon } from '@renderer/components/layout/DirectionalIcon'
 import { TagInput } from '@renderer/components/TagInput'
 import { cn } from '@renderer/lib/utils'
-import { PREVIEW_IMAGE_EXTS } from '@shared/extensions'
+import { PREVIEW_IMAGE_EXTS, PREVIEW_TEXT_EXTS } from '@shared/extensions'
 import { makeRepsilFileUrl } from '@shared/repsilFile'
 import type { DocumentDetail, DocumentMetadataPatch } from '@shared/types'
 
@@ -64,6 +64,9 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
   const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([])
   const [extractedText, setExtractedText] = React.useState('')
   const [originalExtractedText, setOriginalExtractedText] = React.useState('')
+  // Raw text/markdown preview, fetched from the repsil-file:// scheme.
+  const [textPreview, setTextPreview] = React.useState<string | null>(null)
+  const [textTruncated, setTextTruncated] = React.useState(false)
   // Cleared on unmount so background poll loops stop touching state (IN-03).
   const aliveRef = React.useRef(true)
   React.useEffect(() => {
@@ -101,6 +104,31 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
       cancelled = true
     }
   }, [id])
+
+  React.useEffect(() => {
+    setTextPreview(null)
+    setTextTruncated(false)
+    if (!doc || !PREVIEW_TEXT_EXTS.has(doc.ext)) return
+    let cancelled = false
+    const MAX_BYTES = 1_000_000
+    void (async () => {
+      try {
+        const res = await fetch(makeRepsilFileUrl(doc.rel_path))
+        const buf = await res.arrayBuffer()
+        if (cancelled) return
+        const truncated = buf.byteLength > MAX_BYTES
+        const view = truncated ? buf.slice(0, MAX_BYTES) : buf
+        setTextPreview(new TextDecoder('utf-8').decode(view))
+        setTextTruncated(truncated)
+      } catch (err) {
+        if (!cancelled) setTextPreview('')
+        console.error('failed to load text preview:', err)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [doc?.rel_path, doc?.ext])
 
   const tagsDirty = !arraysEqual(tags, originalTags)
   const textDirty = extractedText !== originalExtractedText
@@ -166,6 +194,7 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
 
   const isPdf = doc.ext === 'pdf'
   const isImage = PREVIEW_IMAGE_EXTS.has(doc.ext)
+  const isText = PREVIEW_TEXT_EXTS.has(doc.ext)
   const fileUrl = makeRepsilFileUrl(doc.rel_path)
   const editedFields = parseEdited(doc.user_edited_fields)
   const canOcr = isImage
@@ -291,7 +320,23 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
               className="m-auto max-h-full max-w-full object-contain"
             />
           )}
-          {!isPdf && !isImage && (
+          {isText &&
+            (textPreview === null ? (
+              <Loader2 className="m-auto h-5 w-5 animate-spin text-fg-muted" />
+            ) : (
+              <div className="h-full w-full overflow-auto p-4">
+                <pre
+                  dir={doc.language === 'ar' ? 'rtl' : 'ltr'}
+                  className="whitespace-pre-wrap break-words font-mono text-w-small text-fg"
+                >
+                  {textPreview}
+                </pre>
+                {textTruncated && (
+                  <p className="mt-3 text-w-small text-fg-muted">{t('document.truncatedPreview')}</p>
+                )}
+              </div>
+            ))}
+          {!isPdf && !isImage && !isText && (
             <div className="m-auto flex flex-col items-center gap-3 text-fg-muted">
               <FileText className="h-8 w-8" />
               <span className="text-w-small">{t('document.noPreview')}</span>

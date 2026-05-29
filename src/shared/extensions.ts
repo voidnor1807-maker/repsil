@@ -19,3 +19,19 @@ export const PREVIEW_IMAGE_EXTS: ReadonlySet<string> = new Set([
   'gif',
   'svg'
 ])
+
+/** Plain-text extensions the renderer shows as a text preview. */
+export const PREVIEW_TEXT_EXTS: ReadonlySet<string> = new Set([
+  'md',
+  'markdown',
+  'txt',
+  'text',
+  'log',
+  'csv',
+  'tsv',
+  'json',
+  'xml',
+  'yml',
+  'yaml',
+  'ini'
+])

@@ -54,6 +54,7 @@
     "extractedText": "Extracted text",
     "noExtractedText": "No text extracted yet.",
     "noPreview": "No preview available for this file type.",
+    "truncatedPreview": "Preview truncated — file is large. Open in the default app to see all of it.",
     "runOcr": "Run OCR",
     "ocrRunning": "Running OCR…",
     "tagsPlaceholder": "Add tags…",

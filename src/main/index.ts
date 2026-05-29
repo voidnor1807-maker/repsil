@@ -31,7 +31,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/preload.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      plugins: true
     }
   })
 
