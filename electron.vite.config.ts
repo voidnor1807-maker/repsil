@@ -4,7 +4,9 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    // franc-min (and its trigram deps) are ESM-only; bundle them into the CJS
+    // main process instead of leaving a require() that Electron can't resolve.
+    plugins: [externalizeDepsPlugin({ exclude: ['franc-min'] })],
     resolve: {
       alias: {
         '@main': resolve('src/main'),
