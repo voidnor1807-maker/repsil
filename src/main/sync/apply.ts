@@ -100,6 +100,24 @@ export async function applyIncomingFile(
   }
   const st = await fs.stat(safe)
 
+  // Restore semantics: if we still have a tombstone for this path and the
+  // incoming file is newer than the recorded deletion, drop the tombstone and
+  // purge any local trash bytes — a peer just restored the file. Without this,
+  // the trash listing would show a "deleted" entry for a file that is now back
+  // on disk.
+  const tomb = repsil.queries.getTombstone.get(msg.rel_path)
+  if (tomb && msg.mtime > tomb.deleted_at) {
+    if (tomb.trash_id && tomb.filename) {
+      const { trashFileAbs } = await import('../trash')
+      try {
+        await fs.unlink(trashFileAbs(repsil.rootPath, tomb.trash_id, tomb.filename))
+      } catch {
+        /* ignore */
+      }
+    }
+    repsil.queries.deleteTombstone.run(msg.rel_path)
+  }
+
   const existing = repsil.queries.getDocumentByRelPath.get(msg.rel_path) as DocumentRow | undefined
   if (!existing) {
     repsil.queries.insertDocument.run({
@@ -183,26 +201,35 @@ export async function preserveConflict(
   enqueue(row.id)
 }
 
-/** Delete a file locally because a peer deleted it more recently. */
+/**
+ * Apply a peer's tombstone locally. Delegates to the trash module so the
+ * deletion is treated as a "shared trash" event: if we still have the file,
+ * we move it into our own .repsil/trash/<trash_id>/ before unlinking, and we
+ * persist the metadata snapshot the peer sent so the trash view renders the
+ * deletion identically on both sides.
+ *
+ * Imported lazily because trash.ts depends on bus, which depends on apply
+ * indirectly via the engine's wiring. Keeping this import inside the function
+ * body avoids any TDZ issue if the dep graph shifts.
+ */
 export async function applyTombstone(
   repsil: RepsilDb,
-  relPath: string,
-  contentHash: string | null,
-  deletedAt: number
-): Promise<void> {
-  const safe = resolveInsideArchive(repsil.rootPath, relPath)
-  if (safe) {
-    try {
-      await fs.unlink(safe)
-    } catch {
-      // already gone
-    }
+  t: {
+    rel_path: string
+    content_hash: string | null
+    deleted_at: number
+    trash_id: string | null
+    filename: string | null
+    ext: string | null
+    size_bytes: number | null
+    deleted_by: string | null
+    snap_title: string | null
+    snap_doc_date: string | null
+    snap_source: string | null
+    snap_notes: string | null
+    snap_user_edited_fields: string | null
   }
-  repsil.queries.deleteDocumentByRelPath.run(relPath)
-  repsil.queries.insertTombstone.run({
-    rel_path: relPath,
-    content_hash: contentHash,
-    deleted_at: deletedAt,
-    device: null
-  })
+): Promise<void> {
+  const { adoptIncomingTombstone } = await import('../trash')
+  await adoptIncomingTombstone(repsil, t)
 }

@@ -57,9 +57,20 @@
     "matchAll": "Match all",
     "matchAny": "Match any"
   },
+  "trash": {
+    "title": "Trash",
+    "subtitle": "Recently deleted — synced across paired devices.",
+    "empty": "Nothing in the trash.",
+    "restore": "Restore",
+    "purge": "Delete forever",
+    "purgeConfirm": "Permanently delete this file? This cannot be undone.",
+    "deletedBy": "by {{device}}"
+  },
   "document": {
     "metadata": "Details",
     "extractedText": "Extracted text",
+    "delete": "Move to trash",
+    "deleteConfirm": "Move this file to the trash? It will sync to paired devices and stay recoverable for 30 days.",
     "noExtractedText": "No text extracted yet.",
     "noPreview": "No preview available for this file type.",
     "truncatedPreview": "Preview truncated — file is large. Open in the default app to see all of it.",

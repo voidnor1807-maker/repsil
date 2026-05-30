@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, FileText, Loader2, RefreshCw, Settings, Tag as TagIcon, AlertCircle, Wifi } from 'lucide-react'
+import { Search, FileText, Loader2, RefreshCw, Settings, Tag as TagIcon, Trash2, AlertCircle, Wifi } from 'lucide-react'
 import { WorkShell } from '@renderer/components/layout/WorkShell'
 import { FolderTree } from '@renderer/components/FolderTree'
 import { SearchFilters } from '@renderer/components/SearchFilters'
@@ -15,6 +15,9 @@ const SettingsSheet = React.lazy(() =>
 )
 const SyncSheet = React.lazy(() =>
   import('@renderer/components/SyncSheet').then((m) => ({ default: m.SyncSheet }))
+)
+const TrashView = React.lazy(() =>
+  import('@renderer/pages/TrashView').then((m) => ({ default: m.TrashView }))
 )
 import type {
   AppSettings,
@@ -44,6 +47,7 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   const [tags, setTags] = React.useState<TagWithUsage[]>([])
   const [queueStatus, setQueueStatus] = React.useState<ExtractionQueueStatus | null>(null)
   const [selectedId, setSelectedId] = React.useState<number | null>(null)
+  const [trashOpen, setTrashOpen] = React.useState(false)
   const [settingsOpen, setSettingsOpen] = React.useState(false)
   const [syncOpen, setSyncOpen] = React.useState(false)
   const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null)
@@ -211,6 +215,14 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     )
   }
 
+  if (trashOpen) {
+    return (
+      <React.Suspense fallback={<div className="h-full w-full bg-bg" />}>
+        <TrashView onBack={() => setTrashOpen(false)} />
+      </React.Suspense>
+    )
+  }
+
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>): Promise<void> => {
     e.preventDefault()
     e.stopPropagation()
@@ -278,6 +290,14 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
                 />
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => setTrashOpen(true)}
+              className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2 text-start text-w-body text-fg-muted hover:bg-bg-elevated/60 hover:text-fg"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span className="flex-1 truncate">{t('trash.title')}</span>
+            </button>
           </div>
         }
         topBar={

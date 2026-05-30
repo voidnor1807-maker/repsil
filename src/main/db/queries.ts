@@ -41,6 +41,32 @@ export interface TombstoneRow {
   content_hash: string | null
   deleted_at: number
   device: string | null
+  // Shared-trash columns (M5). NULL on tombstones that did not preserve bytes.
+  trash_id: string | null
+  filename: string | null
+  ext: string | null
+  size_bytes: number | null
+  deleted_by: string | null
+  snap_title: string | null
+  snap_doc_date: string | null
+  snap_source: string | null
+  snap_notes: string | null
+  snap_user_edited_fields: string | null
+}
+
+/** A trash item view-model — tombstones whose file is still in .repsil/trash/. */
+export interface TrashItemRow {
+  trash_id: string
+  rel_path: string
+  filename: string
+  ext: string | null
+  size_bytes: number | null
+  deleted_at: number
+  deleted_by: string | null
+  snap_title: string | null
+  snap_doc_date: string | null
+  snap_source: string | null
+  snap_notes: string | null
 }
 
 export interface NewDocument {
@@ -314,31 +340,100 @@ export function createQueries(db: Database.Database) {
        WHERE rel_path = @rel_path
     `),
 
-    // Tombstones — propagate deletes across peers.
+    // Tombstones — propagate deletes across peers. Extended in M5 to carry
+    // the trash bundle (file ID, filename snapshot, metadata snapshot) so the
+    // shared trash view can render entries from peers and either side can
+    // restore.
     insertTombstone: db.prepare<{
       rel_path: string
       content_hash: string | null
       deleted_at: number
       device: string | null
+      trash_id: string | null
+      filename: string | null
+      ext: string | null
+      size_bytes: number | null
+      deleted_by: string | null
+      snap_title: string | null
+      snap_doc_date: string | null
+      snap_source: string | null
+      snap_notes: string | null
+      snap_user_edited_fields: string | null
     }>(`
-      INSERT INTO tombstones (rel_path, content_hash, deleted_at, device)
-      VALUES (@rel_path, @content_hash, @deleted_at, @device)
+      INSERT INTO tombstones (
+        rel_path, content_hash, deleted_at, device,
+        trash_id, filename, ext, size_bytes, deleted_by,
+        snap_title, snap_doc_date, snap_source, snap_notes, snap_user_edited_fields
+      )
+      VALUES (
+        @rel_path, @content_hash, @deleted_at, @device,
+        @trash_id, @filename, @ext, @size_bytes, @deleted_by,
+        @snap_title, @snap_doc_date, @snap_source, @snap_notes, @snap_user_edited_fields
+      )
       ON CONFLICT(rel_path) DO UPDATE SET
         content_hash = excluded.content_hash,
         deleted_at = excluded.deleted_at,
-        device = excluded.device
+        device = excluded.device,
+        trash_id = COALESCE(excluded.trash_id, tombstones.trash_id),
+        filename = COALESCE(excluded.filename, tombstones.filename),
+        ext = COALESCE(excluded.ext, tombstones.ext),
+        size_bytes = COALESCE(excluded.size_bytes, tombstones.size_bytes),
+        deleted_by = COALESCE(excluded.deleted_by, tombstones.deleted_by),
+        snap_title = COALESCE(excluded.snap_title, tombstones.snap_title),
+        snap_doc_date = COALESCE(excluded.snap_doc_date, tombstones.snap_doc_date),
+        snap_source = COALESCE(excluded.snap_source, tombstones.snap_source),
+        snap_notes = COALESCE(excluded.snap_notes, tombstones.snap_notes),
+        snap_user_edited_fields = COALESCE(excluded.snap_user_edited_fields, tombstones.snap_user_edited_fields)
     `),
     listTombstones: db.prepare<[], TombstoneRow>(
-      `SELECT rel_path, content_hash, deleted_at, device FROM tombstones`
+      `SELECT rel_path, content_hash, deleted_at, device,
+              trash_id, filename, ext, size_bytes, deleted_by,
+              snap_title, snap_doc_date, snap_source, snap_notes, snap_user_edited_fields
+         FROM tombstones`
     ),
     getTombstone: db.prepare<string, TombstoneRow>(
-      `SELECT rel_path, content_hash, deleted_at, device FROM tombstones WHERE rel_path = ?`
+      `SELECT rel_path, content_hash, deleted_at, device,
+              trash_id, filename, ext, size_bytes, deleted_by,
+              snap_title, snap_doc_date, snap_source, snap_notes, snap_user_edited_fields
+         FROM tombstones WHERE rel_path = ?`
+    ),
+    getTombstoneByTrashId: db.prepare<string, TombstoneRow>(
+      `SELECT rel_path, content_hash, deleted_at, device,
+              trash_id, filename, ext, size_bytes, deleted_by,
+              snap_title, snap_doc_date, snap_source, snap_notes, snap_user_edited_fields
+         FROM tombstones WHERE trash_id = ?`
     ),
     deleteTombstone: db.prepare<string>(
       `DELETE FROM tombstones WHERE rel_path = ?`
     ),
     pruneTombstones: db.prepare<number>(
       `DELETE FROM tombstones WHERE deleted_at < ?`
+    ),
+    /** Trash listing for the UI: only tombstones whose file is still on disk
+     *  under .repsil/trash/{trash_id}/. Ordered newest first. */
+    listTrashItems: db.prepare<[], TrashItemRow>(
+      `SELECT trash_id, rel_path, filename, ext, size_bytes, deleted_at, deleted_by,
+              snap_title, snap_doc_date, snap_source, snap_notes
+         FROM tombstones
+        WHERE trash_id IS NOT NULL AND filename IS NOT NULL
+        ORDER BY deleted_at DESC`
+    ),
+    /** Clear the trash file pointer (after restore or purge) without losing
+     *  the tombstone, so the deletion still propagates to peers. */
+    clearTombstoneTrash: db.prepare<string>(
+      `UPDATE tombstones SET trash_id = NULL, filename = NULL, ext = NULL,
+              size_bytes = NULL,
+              snap_title = NULL, snap_doc_date = NULL, snap_source = NULL,
+              snap_notes = NULL, snap_user_edited_fields = NULL
+        WHERE rel_path = ?`
+    ),
+    /** Tombstones that still have trash bytes AND are older than the cutoff.
+     *  Used by the 30-day sweeper to find files to purge. */
+    listTrashItemsOlderThan: db.prepare<number, TrashItemRow>(
+      `SELECT trash_id, rel_path, filename, ext, size_bytes, deleted_at, deleted_by,
+              snap_title, snap_doc_date, snap_source, snap_notes
+         FROM tombstones
+        WHERE trash_id IS NOT NULL AND deleted_at < ?`
     ),
 
     // Known peers (UI list).

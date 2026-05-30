@@ -102,12 +102,27 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
         user_edited_fields: row.user_edited_fields
       })
       // Record a tombstone so the delete propagates to peers, and push it live.
+      // The trash bundle is null here because the file was deleted out from
+      // under us (Explorer / external) — bytes are already gone, so there's
+      // nothing to put in the shared trash. The metadata snapshot still
+      // travels with the tombstone so peers can show "deleted file: ..." in
+      // their trash view if useful.
       const deletedAt = Date.now()
       repsil.queries.insertTombstone.run({
         rel_path: rel,
         content_hash: row.content_hash,
         deleted_at: deletedAt,
-        device: null
+        device: null,
+        trash_id: null,
+        filename: row.filename,
+        ext: row.ext,
+        size_bytes: row.size_bytes,
+        deleted_by: null,
+        snap_title: row.title,
+        snap_doc_date: row.doc_date,
+        snap_source: row.source,
+        snap_notes: row.notes,
+        snap_user_edited_fields: row.user_edited_fields
       })
       repsil.queries.deleteDocumentByRelPath.run(rel)
       emitDeleted(rel, row.content_hash, deletedAt)

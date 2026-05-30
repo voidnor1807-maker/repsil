@@ -8,10 +8,19 @@ import { terminateOcr } from './extraction/ocr'
 import { registerProtocolHandlers, registerProtocolSchemes } from './protocol'
 import { startWatcher, stopWatcher } from './watcher/fileWatcher'
 import { stopSync } from './sync/manager'
+import { sweepTrash } from './trash'
+import { getDb } from './db'
 
 registerProtocolSchemes()
 
+// 30-day retention for shared trash. Sweeper runs hourly while the app is up;
+// any trash file older than the window is purged from disk and its tombstone
+// row deleted so peers eventually stop replicating the deletion record.
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
+const TRASH_SWEEP_INTERVAL_MS = 60 * 60 * 1000
+
 let mainWindow: BrowserWindow | null = null
+let trashSweepTimer: ReturnType<typeof setInterval> | null = null
 
 function isDev(): boolean {
   return !app.isPackaged
@@ -72,6 +81,17 @@ app.whenReady().then(async () => {
     }
   }
   registerIpcHandlers()
+  // Sweep trash once on startup, then hourly. Lookup is by-db each tick so
+  // changing the open archive at runtime is handled without restarting.
+  const tick = (): void => {
+    const repsil = getDb()
+    if (!repsil) return
+    void sweepTrash(repsil, TRASH_RETENTION_MS).catch((err) =>
+      console.error('trash sweep failed:', err)
+    )
+  }
+  tick()
+  trashSweepTimer = setInterval(tick, TRASH_SWEEP_INTERVAL_MS)
   createWindow()
 
   app.on('activate', () => {
@@ -85,6 +105,10 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', async (event) => {
   event.preventDefault()
+  if (trashSweepTimer) {
+    clearInterval(trashSweepTimer)
+    trashSweepTimer = null
+  }
   await stopSync()
   await stopWatcher()
   unbindQueue()

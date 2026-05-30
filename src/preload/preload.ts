@@ -16,7 +16,8 @@ import type {
   SearchResult,
   SyncStatus,
   Tag,
-  TagWithUsage
+  TagWithUsage,
+  TrashItem
 } from '@shared/types'
 
 const api = {
@@ -65,6 +66,10 @@ const api = {
       destFolderRel: string
     ): Promise<{ imported: string[]; skipped: Array<{ source: string; reason: string }> }> =>
       ipcRenderer.invoke('documents:import', sources, destFolderRel),
+    /** Soft-delete: move the file into the shared trash. Propagates as a
+     *  tombstone to peers. */
+    delete: (relPath: string): Promise<boolean> =>
+      ipcRenderer.invoke('documents:delete', relPath),
     /** Electron 32+ no longer exposes File.path; renderer must resolve dropped
      *  file paths through this bridge. Returns '' for non-file blobs. */
     resolveDroppedPath: (file: File): string => {
@@ -100,6 +105,12 @@ const api = {
   },
   extraction: {
     status: (): Promise<ExtractionQueueStatus> => ipcRenderer.invoke('extraction:status')
+  },
+  trash: {
+    list: (): Promise<TrashItem[]> => ipcRenderer.invoke('trash:list'),
+    restore: (trashId: string): Promise<string | null> =>
+      ipcRenderer.invoke('trash:restore', trashId),
+    purge: (trashId: string): Promise<boolean> => ipcRenderer.invoke('trash:purge', trashId)
   },
   sync: {
     host: (): Promise<HostResult> => ipcRenderer.invoke('sync:host'),

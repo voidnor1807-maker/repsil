@@ -8,6 +8,26 @@ const entry = (
   meta_updated_at: number | null = null
 ) => ({ rel_path, content_hash, size_bytes: 100, mtime, meta_updated_at })
 
+const tomb = (
+  rel_path: string,
+  content_hash: string | null,
+  deleted_at: number
+) => ({
+  rel_path,
+  content_hash,
+  deleted_at,
+  trash_id: null,
+  filename: null,
+  ext: null,
+  size_bytes: null,
+  deleted_by: null,
+  snap_title: null,
+  snap_doc_date: null,
+  snap_source: null,
+  snap_notes: null,
+  snap_user_edited_fields: null
+})
+
 const m = (entries: Manifest['entries'], tombstones: Manifest['tombstones'] = []): Manifest => ({
   entries,
   tombstones
@@ -73,7 +93,7 @@ describe('diffManifests', () => {
   it('deletes locally when the remote tombstone is newer than the local file', () => {
     const plan = diffManifests(
       m([entry('a.pdf', 'h1', 10)]),
-      m([], [{ rel_path: 'a.pdf', content_hash: 'h1', deleted_at: 20 }])
+      m([], [tomb('a.pdf', 'h1', 20)])
     )
     expect(plan.deleteLocal.map((d) => d.rel_path)).toEqual(['a.pdf'])
   })
@@ -81,14 +101,14 @@ describe('diffManifests', () => {
   it('does not resurrect a file the local side re-created after the remote delete', () => {
     const plan = diffManifests(
       m([entry('a.pdf', 'h9', 30)]),
-      m([], [{ rel_path: 'a.pdf', content_hash: 'h1', deleted_at: 20 }])
+      m([], [tomb('a.pdf', 'h1', 20)])
     )
     expect(plan.deleteLocal).toEqual([])
   })
 
   it('does not pull a file the local side deleted more recently', () => {
     const plan = diffManifests(
-      m([], [{ rel_path: 'a.pdf', content_hash: 'h1', deleted_at: 30 }]),
+      m([], [tomb('a.pdf', 'h1', 30)]),
       m([entry('a.pdf', 'h1', 20)])
     )
     expect(plan.pullFiles).toEqual([])

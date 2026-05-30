@@ -113,9 +113,29 @@ CREATE TABLE sync_peers (
 );
 `
 
+// Shared trash. A "tombstone with file" — when the user trashes a file from
+// inside the app, we keep the bytes under .repsil/trash/{trash_id}/{filename}
+// so peers can show the deletion in a shared trash view and either side can
+// restore. Tombstones without trash_id (e.g. file deleted in Explorer) still
+// propagate the deletion event but offer no restore.
+const M5_SHARED_TRASH = `
+ALTER TABLE tombstones ADD COLUMN trash_id TEXT;
+ALTER TABLE tombstones ADD COLUMN filename TEXT;
+ALTER TABLE tombstones ADD COLUMN ext TEXT;
+ALTER TABLE tombstones ADD COLUMN size_bytes INTEGER;
+ALTER TABLE tombstones ADD COLUMN deleted_by TEXT;
+ALTER TABLE tombstones ADD COLUMN snap_title TEXT;
+ALTER TABLE tombstones ADD COLUMN snap_doc_date TEXT;
+ALTER TABLE tombstones ADD COLUMN snap_source TEXT;
+ALTER TABLE tombstones ADD COLUMN snap_notes TEXT;
+ALTER TABLE tombstones ADD COLUMN snap_user_edited_fields TEXT;
+CREATE INDEX IF NOT EXISTS idx_tombstones_trash_id ON tombstones(trash_id);
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: M1_INITIAL },
   { version: 2, sql: M2_EXTRACTION_REPORTING },
   { version: 3, sql: M3_APP_SETTINGS },
-  { version: 4, sql: M4_SYNC }
+  { version: 4, sql: M4_SYNC },
+  { version: 5, sql: M5_SHARED_TRASH }
 ]

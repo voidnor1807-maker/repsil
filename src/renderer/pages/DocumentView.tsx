@@ -9,7 +9,8 @@ import {
   Loader2,
   RotateCw,
   ScanText,
-  Save
+  Save,
+  Trash2
 } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { DirectionalIcon } from '@renderer/components/layout/DirectionalIcon'
@@ -272,6 +273,19 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
             {ocrInProgress ? t('document.ocrRunning') : t('document.runOcr')}
           </Button>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={async () => {
+            if (!confirm(t('document.deleteConfirm'))) return
+            const ok = await window.repsil.documents.delete(doc.rel_path)
+            if (ok) onBack()
+          }}
+          className="gap-1.5 text-destructive hover:text-destructive"
+          title={t('document.delete')}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
         <Button
           size="sm"
           onClick={() => void handleSave()}

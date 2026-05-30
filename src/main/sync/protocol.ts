@@ -1,10 +1,25 @@
 import type { ManifestEntry } from '../db/queries'
 
-/** Tombstone shape exchanged on the wire (subset of the DB row). */
+/**
+ * Tombstone shape exchanged on the wire. Carries the optional shared-trash
+ * bundle so a receiving peer can render the deletion in its trash view and
+ * (if it also has local bytes for the file) move its copy to its own
+ * .repsil/trash/ for independent restore.
+ */
 export interface WireTombstone {
   rel_path: string
   content_hash: string | null
   deleted_at: number
+  trash_id: string | null
+  filename: string | null
+  ext: string | null
+  size_bytes: number | null
+  deleted_by: string | null
+  snap_title: string | null
+  snap_doc_date: string | null
+  snap_source: string | null
+  snap_notes: string | null
+  snap_user_edited_fields: string | null
 }
 
 /**
@@ -42,7 +57,7 @@ export type SyncMessage =
       meta: SyncedMeta
     }
   | { t: 'meta'; rel_path: string; meta: SyncedMeta }
-  | { t: 'tombstone'; rel_path: string; content_hash: string | null; deleted_at: number }
+  | ({ t: 'tombstone' } & WireTombstone)
   | { t: 'ping' }
 
 // Cap a single frame so a malformed/hostile length prefix can't trigger a huge

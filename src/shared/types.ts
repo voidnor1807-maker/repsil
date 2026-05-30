@@ -163,3 +163,19 @@ export interface JoinResult {
   ok: boolean
   error: string | null
 }
+
+// --- Shared trash ---
+
+export interface TrashItem {
+  trash_id: string
+  rel_path: string
+  filename: string
+  ext: string | null
+  size_bytes: number | null
+  deleted_at: number
+  deleted_by: string | null
+  snap_title: string | null
+  snap_doc_date: string | null
+  snap_source: string | null
+  snap_notes: string | null
+}

@@ -129,6 +129,8 @@ class FakeArchive {
         run: (t: { rel_path: string; content_hash: string | null; deleted_at: number }) =>
           void this.tombs.set(t.rel_path, t)
       },
+      getTombstone: { get: (rel: string) => this.tombs.get(rel) },
+      deleteTombstone: { run: (rel: string) => void this.tombs.delete(rel) },
       upsertTag: {
         get: (name: string) => {
           let id = this.tags.get(name)

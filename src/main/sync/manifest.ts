@@ -2,10 +2,23 @@ import type { RepsilDb } from '../db'
 import type { ManifestEntry, TombstoneRow } from '../db/queries'
 import { inheritsFolderFlag } from '../folders'
 
+/** Manifest-level tombstone shape. Mirrors WireTombstone so a peer that
+ *  receives just a manifest (initial reconcile) ends up with the same trash
+ *  metadata it would get from a live tombstone message. */
 export interface ManifestTombstone {
   rel_path: string
   content_hash: string | null
   deleted_at: number
+  trash_id: string | null
+  filename: string | null
+  ext: string | null
+  size_bytes: number | null
+  deleted_by: string | null
+  snap_title: string | null
+  snap_doc_date: string | null
+  snap_source: string | null
+  snap_notes: string | null
+  snap_user_edited_fields: string | null
 }
 
 export interface Manifest {
@@ -40,7 +53,17 @@ export function buildManifest(repsil: RepsilDb): Manifest {
   const tombstones = (repsil.queries.listTombstones.all() as TombstoneRow[]).map((t) => ({
     rel_path: t.rel_path,
     content_hash: t.content_hash,
-    deleted_at: t.deleted_at
+    deleted_at: t.deleted_at,
+    trash_id: t.trash_id,
+    filename: t.filename,
+    ext: t.ext,
+    size_bytes: t.size_bytes,
+    deleted_by: t.deleted_by,
+    snap_title: t.snap_title,
+    snap_doc_date: t.snap_doc_date,
+    snap_source: t.snap_source,
+    snap_notes: t.snap_notes,
+    snap_user_edited_fields: t.snap_user_edited_fields
   }))
   return { entries, tombstones }
 }

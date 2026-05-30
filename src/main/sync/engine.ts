@@ -121,7 +121,21 @@ export class SyncEngine {
         this.cb.onApplied?.(msg)
         break
       case 'tombstone':
-        void applyTombstone(this.repsil, msg.rel_path, msg.content_hash, msg.deleted_at)
+        void applyTombstone(this.repsil, {
+          rel_path: msg.rel_path,
+          content_hash: msg.content_hash,
+          deleted_at: msg.deleted_at,
+          trash_id: msg.trash_id,
+          filename: msg.filename,
+          ext: msg.ext,
+          size_bytes: msg.size_bytes,
+          deleted_by: msg.deleted_by,
+          snap_title: msg.snap_title,
+          snap_doc_date: msg.snap_doc_date,
+          snap_source: msg.snap_source,
+          snap_notes: msg.snap_notes,
+          snap_user_edited_fields: msg.snap_user_edited_fields
+        })
           .then(() => this.cb.onApplied?.(msg))
           .catch((err) => console.error('sync: applyTombstone failed:', err))
         break
@@ -173,8 +187,28 @@ export class SyncEngine {
         const m = metaMessageFor(this.repsil, rel)
         if (m) this.send(m)
       }),
-      onDeleted((rel, hash, at) => {
-        this.send({ t: 'tombstone', rel_path: rel, content_hash: hash, deleted_at: at })
+      onDeleted((rel) => {
+        // Look up the (just-inserted) tombstone row so the wire message carries
+        // the full shared-trash bundle when present. Falls back to a bare
+        // tombstone if the row vanished (peer can still apply the deletion).
+        const tomb = this.repsil.queries.getTombstone.get(rel)
+        if (!tomb) return
+        this.send({
+          t: 'tombstone',
+          rel_path: tomb.rel_path,
+          content_hash: tomb.content_hash,
+          deleted_at: tomb.deleted_at,
+          trash_id: tomb.trash_id,
+          filename: tomb.filename,
+          ext: tomb.ext,
+          size_bytes: tomb.size_bytes,
+          deleted_by: tomb.deleted_by,
+          snap_title: tomb.snap_title,
+          snap_doc_date: tomb.snap_doc_date,
+          snap_source: tomb.snap_source,
+          snap_notes: tomb.snap_notes,
+          snap_user_edited_fields: tomb.snap_user_edited_fields
+        })
       })
     )
   }
@@ -194,7 +228,7 @@ export class SyncEngine {
     const plan = diffManifests(local, { entries: msg.entries, tombstones: msg.tombstones })
 
     for (const d of plan.deleteLocal) {
-      void applyTombstone(this.repsil, d.rel_path, d.content_hash, d.deleted_at).catch((err) =>
+      void applyTombstone(this.repsil, d).catch((err) =>
         console.error('sync: delete-local failed:', err)
       )
     }

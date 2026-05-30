@@ -33,6 +33,7 @@ import { getSettings, loadArchiveSettings, updateSettings } from './settings'
 import { getDb, openDb } from './db'
 import { bindQueue, drainPending, enqueueExtraction, queueStatus } from './extraction/queue'
 import { importExternalFiles, type ImportResult } from './fileops'
+import { listTrash, moveToTrash, purgeFromTrash, restoreFromTrash } from './trash'
 import { reconcile } from './watcher/reconcile'
 import { startWatcher } from './watcher/fileWatcher'
 import type { DocumentRow } from './db/queries'
@@ -186,6 +187,48 @@ export function registerIpcHandlers(): void {
       return importExternalFiles(current, sources, destFolderRel)
     }
   )
+
+  ipcMain.handle('documents:delete', async (_evt, relPath: string): Promise<boolean> => {
+    const current = getDb()
+    if (!current) return false
+    const settings = getSettings()
+    const deletedBy = settings.deviceName || null
+    try {
+      const r = await moveToTrash(current, relPath, deletedBy)
+      return r !== null
+    } catch (err) {
+      console.error('documents:delete failed:', err)
+      return false
+    }
+  })
+
+  ipcMain.handle('trash:list', () => {
+    const current = getDb()
+    if (!current) return []
+    return listTrash(current)
+  })
+
+  ipcMain.handle('trash:restore', async (_evt, trashId: string): Promise<string | null> => {
+    const current = getDb()
+    if (!current) return null
+    try {
+      return await restoreFromTrash(current, trashId)
+    } catch (err) {
+      console.error('trash:restore failed:', err)
+      return null
+    }
+  })
+
+  ipcMain.handle('trash:purge', async (_evt, trashId: string): Promise<boolean> => {
+    const current = getDb()
+    if (!current) return false
+    try {
+      return await purgeFromTrash(current, trashId)
+    } catch (err) {
+      console.error('trash:purge failed:', err)
+      return false
+    }
+  })
 
   ipcMain.handle('documents:retry', (_evt, id: number): boolean => {
     const current = getDb()
