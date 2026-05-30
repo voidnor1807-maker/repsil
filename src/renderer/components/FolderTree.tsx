@@ -2,7 +2,7 @@ import * as React from 'react'
 import * as ContextMenu from '@radix-ui/react-context-menu'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, Folder, FolderOpen, Check, MoreVertical } from 'lucide-react'
+import { ChevronRight, Folder, FolderOpen, Check, FolderPlus, MoreVertical } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import type { FolderNode, FolderSettings } from '@shared/types'
 
@@ -11,13 +11,19 @@ interface FolderTreeProps {
   selectedRel: string | null
   onSelect: (rel: string) => void
   onSetFolderSettings: (settings: FolderSettings) => void
+  /** Create a folder. Resolves with non-null error string on failure. */
+  onCreateFolder?: (parentRel: string, name: string) => Promise<string | null>
+  /** Move a document into a folder. Drop targets pass the source rel_path. */
+  onMoveDocument?: (srcRelPath: string, destFolderRel: string) => Promise<string | null>
 }
 
 export function FolderTree({
   root,
   selectedRel,
   onSelect,
-  onSetFolderSettings
+  onSetFolderSettings,
+  onCreateFolder,
+  onMoveDocument
 }: FolderTreeProps): JSX.Element {
   return (
     <div className="select-none overflow-auto py-2 text-w-small">
@@ -28,6 +34,8 @@ export function FolderTree({
         selectedRel={selectedRel}
         onSelect={onSelect}
         onSetFolderSettings={onSetFolderSettings}
+        onCreateFolder={onCreateFolder}
+        onMoveDocument={onMoveDocument}
         defaultOpen
       />
     </div>
@@ -41,6 +49,8 @@ interface FolderRowProps {
   selectedRel: string | null
   onSelect: (rel: string) => void
   onSetFolderSettings: (settings: FolderSettings) => void
+  onCreateFolder?: (parentRel: string, name: string) => Promise<string | null>
+  onMoveDocument?: (srcRelPath: string, destFolderRel: string) => Promise<string | null>
   defaultOpen?: boolean
 }
 
@@ -51,9 +61,19 @@ function FolderRow({
   selectedRel,
   onSelect,
   onSetFolderSettings,
+  onCreateFolder,
+  onMoveDocument,
   defaultOpen
 }: FolderRowProps): JSX.Element {
   const { t } = useTranslation()
+  const [dropOver, setDropOver] = React.useState(false)
+  const handleCreateFolder = async (): Promise<void> => {
+    if (!onCreateFolder) return
+    const name = prompt(t('folder.newPrompt'))
+    if (!name?.trim()) return
+    const err = await onCreateFolder(node.rel_path, name.trim())
+    if (err) alert(t('folder.createFailed', { reason: err }))
+  }
   const toggleOcr = (): void =>
     onSetFolderSettings({
       rel_path: node.rel_path,
@@ -82,9 +102,32 @@ function FolderRow({
               if (hasChildren) setOpen(true)
             }}
             onDoubleClick={() => setOpen((o) => !o)}
+            onDragEnter={(e) => {
+              if (!onMoveDocument) return
+              if (!Array.from(e.dataTransfer.types).includes('application/x-repsil-doc')) return
+              e.preventDefault()
+              setDropOver(true)
+            }}
+            onDragOver={(e) => {
+              if (!onMoveDocument) return
+              if (!Array.from(e.dataTransfer.types).includes('application/x-repsil-doc')) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+            }}
+            onDragLeave={() => setDropOver(false)}
+            onDrop={async (e) => {
+              setDropOver(false)
+              if (!onMoveDocument) return
+              const src = e.dataTransfer.getData('application/x-repsil-doc')
+              if (!src) return
+              e.preventDefault()
+              const err = await onMoveDocument(src, node.rel_path)
+              if (err) alert(t('folder.moveFailed', { reason: err }))
+            }}
             className={cn(
               'group flex items-center gap-1 px-2 py-1 transition-colors',
-              selected ? 'bg-accent/15 text-fg' : 'text-fg hover:bg-bg-elevated/60'
+              selected ? 'bg-accent/15 text-fg' : 'text-fg hover:bg-bg-elevated/60',
+              dropOver && 'bg-accent/25 ring-1 ring-accent'
             )}
             style={{ paddingInlineStart: `${depth * 12 + 8}px` }}
           >
@@ -145,6 +188,15 @@ function FolderRow({
                   align="end"
                   className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft"
                 >
+                  {onCreateFolder && (
+                    <DropdownMenu.Item
+                      onSelect={() => void handleCreateFolder()}
+                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                    >
+                      <FolderPlus className="h-3.5 w-3.5 text-fg-muted" />
+                      {t('folder.newFolder')}
+                    </DropdownMenu.Item>
+                  )}
                   <DropdownMenu.Item
                     onSelect={toggleOcr}
                     className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
@@ -170,6 +222,15 @@ function FolderRow({
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft">
+            {onCreateFolder && (
+              <ContextMenu.Item
+                onSelect={() => void handleCreateFolder()}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+              >
+                <FolderPlus className="h-3.5 w-3.5 text-fg-muted" />
+                {t('folder.newFolder')}
+              </ContextMenu.Item>
+            )}
             <ContextMenu.Item
               onSelect={toggleOcr}
               className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
@@ -201,6 +262,8 @@ function FolderRow({
               selectedRel={selectedRel}
               onSelect={onSelect}
               onSetFolderSettings={onSetFolderSettings}
+              onCreateFolder={onCreateFolder}
+              onMoveDocument={onMoveDocument}
             />
           ))}
         </div>

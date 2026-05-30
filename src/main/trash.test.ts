@@ -56,11 +56,13 @@ function stubRepsil(rootPath: string): { repsil: RepsilDb; docs: Map<string, Row
         const existing = tombs.get(t.rel_path)
         if (existing) {
           // mimic ON CONFLICT … COALESCE merge
-          for (const key of Object.keys(t) as (keyof Tomb)[]) {
+          const e = existing as unknown as Record<string, unknown>
+          const inc = t as unknown as Record<string, unknown>
+          for (const key of Object.keys(inc)) {
             if (key === 'rel_path' || key === 'deleted_at' || key === 'content_hash' || key === 'device') {
-              ;(existing as Record<string, unknown>)[key] = t[key] as unknown
-            } else if (t[key] != null) {
-              ;(existing as Record<string, unknown>)[key] = t[key] as unknown
+              e[key] = inc[key]
+            } else if (inc[key] != null) {
+              e[key] = inc[key]
             }
           }
         } else {

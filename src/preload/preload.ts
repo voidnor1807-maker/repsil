@@ -6,6 +6,7 @@ import type {
   DocumentMetadataPatch,
   DocumentSummary,
   ExtractionQueueStatus,
+  FileOpResult,
   FolderNode,
   FolderSettings,
   HostResult,
@@ -70,6 +71,14 @@ const api = {
      *  tombstone to peers. */
     delete: (relPath: string): Promise<boolean> =>
       ipcRenderer.invoke('documents:delete', relPath),
+    /** Rename a single file inside the archive. Keeps the documents row id
+     *  intact so tags/extracted text/content_hash survive. */
+    rename: (relPath: string, newName: string): Promise<FileOpResult> =>
+      ipcRenderer.invoke('documents:rename', relPath, newName),
+    /** Move a file into a different folder (creates the folder if needed,
+     *  auto-suffixes on filename collision). */
+    move: (relPath: string, destFolderRel: string): Promise<FileOpResult> =>
+      ipcRenderer.invoke('documents:move', relPath, destFolderRel),
     /** Electron 32+ no longer exposes File.path; renderer must resolve dropped
      *  file paths through this bridge. Returns '' for non-file blobs. */
     resolveDroppedPath: (file: File): string => {
@@ -87,7 +96,10 @@ const api = {
     }
   },
   folders: {
-    tree: (): Promise<FolderNode | null> => ipcRenderer.invoke('folders:tree')
+    tree: (): Promise<FolderNode | null> => ipcRenderer.invoke('folders:tree'),
+    /** Create an empty folder under parentRel ('' = root). */
+    create: (parentRel: string, name: string): Promise<FileOpResult> =>
+      ipcRenderer.invoke('folders:create', parentRel, name)
   },
   folderSettings: {
     get: (folderRel: string): Promise<FolderSettings> =>

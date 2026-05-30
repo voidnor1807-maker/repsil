@@ -164,6 +164,14 @@ export interface JoinResult {
   error: string | null
 }
 
+// --- File operations (rename / move / create folder) ---
+
+export interface FileOpResult {
+  ok: boolean
+  newRelPath?: string
+  error?: string
+}
+
 // --- Shared trash ---
 
 export interface TrashItem {

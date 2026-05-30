@@ -71,6 +71,9 @@
     "extractedText": "Extracted text",
     "delete": "Move to trash",
     "deleteConfirm": "Move this file to the trash? It will sync to paired devices and stay recoverable for 30 days.",
+    "rename": "Rename file",
+    "renamePrompt": "New filename (with extension):",
+    "renameFailed": "Rename failed: {{reason}}",
     "noExtractedText": "No text extracted yet.",
     "noPreview": "No preview available for this file type.",
     "truncatedPreview": "Preview truncated — file is large. Open in the default app to see all of it.",
@@ -108,7 +111,11 @@
   },
   "folder": {
     "enableOcr": "Enable OCR for new files",
-    "localOnly": "Don't sync (local only)"
+    "localOnly": "Don't sync (local only)",
+    "newFolder": "New folder…",
+    "newPrompt": "Folder name",
+    "createFailed": "Could not create folder: {{reason}}",
+    "moveFailed": "Could not move: {{reason}}"
   },
   "sync": {
     "title": "Sync over LAN",

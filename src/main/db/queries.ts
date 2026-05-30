@@ -119,6 +119,21 @@ export function createQueries(db: Database.Database) {
       `DELETE FROM documents WHERE rel_path = ?`
     ),
 
+    /** In-app rename/move: update the row's path-related fields in place so
+     *  the document id (and tags / extracted_text / content_hash) survive. */
+    renameDocumentByRelPath: db.prepare<{
+      old_rel_path: string
+      new_rel_path: string
+      filename: string
+      ext: string
+    }>(`
+      UPDATE documents
+         SET rel_path = @new_rel_path,
+             filename = @filename,
+             ext = @ext
+       WHERE rel_path = @old_rel_path
+    `),
+
     updateDocumentMtime: db.prepare<{ rel_path: string; mtime: number; size_bytes: number }>(`
       UPDATE documents
          SET mtime = @mtime, size_bytes = @size_bytes,

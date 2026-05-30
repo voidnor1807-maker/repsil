@@ -287,6 +287,14 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
                     await window.repsil.folderSettings.set(s)
                     await reloadTree()
                   }}
+                  onCreateFolder={async (parentRel, name) => {
+                    const r = await window.repsil.folders.create(parentRel, name)
+                    return r.ok ? null : r.error ?? 'failed'
+                  }}
+                  onMoveDocument={async (srcRel, destFolderRel) => {
+                    const r = await window.repsil.documents.move(srcRel, destFolderRel)
+                    return r.ok ? null : r.error ?? 'failed'
+                  }}
                 />
               )}
             </div>
@@ -487,7 +495,15 @@ function ResultRow({
 }): JSX.Element {
   const { t } = useTranslation()
   return (
-    <li>
+    <li
+      draggable
+      onDragStart={(e) => {
+        // Custom MIME type so FolderTree can distinguish a row drag from a
+        // file-from-Explorer drop without ambiguity.
+        e.dataTransfer.setData('application/x-repsil-doc', hit.rel_path)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+    >
       <button
         type="button"
         onClick={onOpen}

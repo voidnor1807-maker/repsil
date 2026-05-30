@@ -32,7 +32,14 @@ import { renderSnippet } from './search/snippet'
 import { getSettings, loadArchiveSettings, updateSettings } from './settings'
 import { getDb, openDb } from './db'
 import { bindQueue, drainPending, enqueueExtraction, queueStatus } from './extraction/queue'
-import { importExternalFiles, type ImportResult } from './fileops'
+import {
+  createFolder,
+  importExternalFiles,
+  moveDocument,
+  renameDocument,
+  type FileOpResult,
+  type ImportResult
+} from './fileops'
 import { listTrash, moveToTrash, purgeFromTrash, restoreFromTrash } from './trash'
 import { reconcile } from './watcher/reconcile'
 import { startWatcher } from './watcher/fileWatcher'
@@ -185,6 +192,33 @@ export function registerIpcHandlers(): void {
       const current = getDb()
       if (!current) return { imported: [], skipped: sources.map((s) => ({ source: s, reason: 'no archive open' })) }
       return importExternalFiles(current, sources, destFolderRel)
+    }
+  )
+
+  ipcMain.handle(
+    'documents:rename',
+    async (_evt, relPath: string, newName: string): Promise<FileOpResult> => {
+      const current = getDb()
+      if (!current) return { ok: false, error: 'no archive open' }
+      return renameDocument(current, relPath, newName)
+    }
+  )
+
+  ipcMain.handle(
+    'documents:move',
+    async (_evt, relPath: string, destFolderRel: string): Promise<FileOpResult> => {
+      const current = getDb()
+      if (!current) return { ok: false, error: 'no archive open' }
+      return moveDocument(current, relPath, destFolderRel)
+    }
+  )
+
+  ipcMain.handle(
+    'folders:create',
+    async (_evt, parentRel: string, name: string): Promise<FileOpResult> => {
+      const current = getDb()
+      if (!current) return { ok: false, error: 'no archive open' }
+      return createFolder(current, parentRel, name)
     }
   )
 

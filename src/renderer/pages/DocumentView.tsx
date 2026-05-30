@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   Loader2,
+  Pencil,
   RotateCw,
   ScanText,
   Save,
@@ -239,6 +240,32 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
           <div className="truncate text-w-body text-fg">{doc.title || doc.filename}</div>
           <div className="truncate font-mono text-w-small text-fg-muted">{doc.rel_path}</div>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={async () => {
+            const next = prompt(t('document.renamePrompt'), doc.filename)
+            if (next == null || next === doc.filename || !next.trim()) return
+            const result = await window.repsil.documents.rename(doc.rel_path, next.trim())
+            if (!result.ok) {
+              alert(t('document.renameFailed', { reason: result.error ?? '' }))
+              return
+            }
+            if (result.newRelPath) {
+              const fresh = await window.repsil.documents.get(id)
+              if (fresh) {
+                setDoc(fresh)
+                const f = toForm(fresh)
+                setForm(f)
+                setOriginal(f)
+              }
+            }
+          }}
+          className="gap-1.5"
+          title={t('document.rename')}
+        >
+          <Pencil className="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           size="sm"

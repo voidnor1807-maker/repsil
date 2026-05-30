@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs'
 import { basename } from 'node:path'
 import type { RepsilDb } from '../db'
 import type { DocumentRow } from '../db/queries'
+import { isEventSuppressed } from '../fileops'
 import { drainPending, enqueueExtraction } from '../extraction/queue'
 import { inheritsFolderFlag } from '../folders'
 import { recordDeletion } from '../renameTracker'
@@ -42,6 +43,10 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
   })
 
   const onUpsert = async (abs: string): Promise<void> => {
+    // Skip events we know belong to an in-app rename/move/delete — fileops
+    // already updated the DB in place; processing the chokidar add here would
+    // re-insert / re-enqueue extraction on the same bytes.
+    if (isEventSuppressed(abs)) return
     const rel = toRel(repsil.rootPath, abs)
     if (isIgnoredRel(rel)) return
     let st: import('node:fs').Stats
@@ -86,6 +91,9 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
   watcher.on('add', (p) => void onUpsert(p))
   watcher.on('change', (p) => void onUpsert(p))
   watcher.on('unlink', (p) => {
+    // Suppressed for the same reason as add: an in-app rename/move/delete
+    // wrote a tombstone or updated the row before calling fs.rename/unlink.
+    if (isEventSuppressed(p)) return
     const rel = toRel(repsil.rootPath, p)
     if (isIgnoredRel(rel)) return
     const row = repsil.queries.getDocumentByRelPath.get(rel) as DocumentRow | undefined
