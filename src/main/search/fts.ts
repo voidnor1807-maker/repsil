@@ -1,8 +1,10 @@
 /**
  * Turn user input into a safe FTS5 MATCH expression. Each whitespace-
- * delimited token becomes a quoted phrase (AND-combined). Embedded double
- * quotes are stripped so a user can't inject FTS syntax. Empty input yields
- * null so callers can short-circuit.
+ * delimited token becomes a quoted *prefix* phrase (AND-combined). The
+ * trailing `*` lets the user find a doc as they type ("gi" finds "gift.html"),
+ * which is what people expect from a search box. Embedded double quotes are
+ * stripped so a user can't inject FTS syntax. Empty input yields null so
+ * callers can short-circuit.
  */
 export function toFtsMatchExpression(raw: string): string | null {
   const trimmed = raw.trim()
@@ -15,5 +17,5 @@ export function toFtsMatchExpression(raw: string): string | null {
     // throw "fts5: syntax error" on the resulting empty phrase (WR-09).
     .filter((t) => /[\p{L}\p{N}]/u.test(t))
   if (tokens.length === 0) return null
-  return tokens.map((t) => `"${t}"`).join(' ')
+  return tokens.map((t) => `"${t}"*`).join(' ')
 }

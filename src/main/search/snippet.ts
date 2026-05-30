@@ -8,7 +8,11 @@
 export const MATCH_START = String.fromCharCode(1)
 export const MATCH_END = String.fromCharCode(2)
 
-export function renderSnippet(raw: string): string {
+export function renderSnippet(raw: string | null): string {
+  // SQLite's snippet() returns NULL when the matched row has nothing indexed in
+  // the snippet column (e.g. a freshly-added file before extraction has
+  // populated extracted_text). Treat that as an empty snippet.
+  if (raw == null) return ''
   const escaped = raw
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

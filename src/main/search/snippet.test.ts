@@ -33,4 +33,8 @@ describe('renderSnippet', () => {
   test('empty string stays empty', () => {
     expect(renderSnippet('')).toBe('')
   })
+
+  test('null from SQLite snippet() becomes empty string', () => {
+    expect(renderSnippet(null)).toBe('')
+  })
 })
