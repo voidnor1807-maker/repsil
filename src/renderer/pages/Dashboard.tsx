@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, FileText, Loader2, Settings, Tag as TagIcon, AlertCircle, Wifi } from 'lucide-react'
+import { Search, FileText, Loader2, RefreshCw, Settings, Tag as TagIcon, AlertCircle, Wifi } from 'lucide-react'
 import { WorkShell } from '@renderer/components/layout/WorkShell'
 import { FolderTree } from '@renderer/components/FolderTree'
 import { SearchFilters } from '@renderer/components/SearchFilters'
@@ -49,6 +49,16 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   const [syncStatus, setSyncStatus] = React.useState<SyncStatus | null>(null)
   const [tagsByDoc, setTagsByDoc] = React.useState<Record<number, string[]>>({})
   const [hasMore, setHasMore] = React.useState(false)
+  // Bumped by the main process whenever the watcher or sync mutates documents.
+  // Adding it to the search-effect deps causes a fresh query without forcing the
+  // user to re-type or change filters.
+  const [refreshKey, setRefreshKey] = React.useState(0)
+  const [rescanning, setRescanning] = React.useState(false)
+  const [dropActive, setDropActive] = React.useState(false)
+  const [importNotice, setImportNotice] = React.useState<string | null>(null)
+  // Tracks nested dragenter/dragleave so we keep the overlay visible while the
+  // pointer crosses over a child element — only the outermost leave clears it.
+  const dragDepthRef = React.useRef(0)
 
   // Effective filters include the currently-selected folder
   const effectiveFilters: Filters = React.useMemo(
@@ -88,7 +98,7 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
       cancelled = true
       clearTimeout(timer)
     }
-  }, [query, effectiveFilters, settings.rootPath])
+  }, [query, effectiveFilters, settings.rootPath, refreshKey])
 
   const loadMore = async (): Promise<void> => {
     try {
@@ -120,6 +130,25 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     void reloadTree()
     void reloadTags()
   }, [reloadTree, reloadTags, settings.rootPath])
+
+  // Auto-clear the import toast after 4s. User can also click to dismiss.
+  React.useEffect(() => {
+    if (!importNotice) return
+    const timer = setTimeout(() => setImportNotice(null), 4000)
+    return () => clearTimeout(timer)
+  }, [importNotice])
+
+  // Live document changes pushed by the main process (watcher add/remove/
+  // change, plus metadata edits and sync apply). Bump refreshKey to re-run the
+  // search, and reload the folder tree because a new file may have created a
+  // new folder. Tags re-fetch happens implicitly inside the search effect.
+  React.useEffect(() => {
+    const off = window.repsil.documents.onChanged(() => {
+      setRefreshKey((k) => k + 1)
+      void reloadTree()
+    })
+    return off
+  }, [reloadTree])
 
   // Live sync status for the status-bar indicator.
   React.useEffect(() => {
@@ -182,8 +211,54 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     )
   }
 
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>): Promise<void> => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragDepthRef.current = 0
+    setDropActive(false)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) return
+    // Electron 32+ removed File.path; the preload bridge does the lookup via
+    // webUtils.getPathForFile. Blobs without a real fs path resolve to '' and
+    // are filtered out here.
+    const paths = files.map((f) => window.repsil.documents.resolveDroppedPath(f)).filter(Boolean)
+    if (paths.length === 0) return
+    try {
+      const r = await window.repsil.documents.import(paths, selectedFolder)
+      const where = selectedFolder ? `/${selectedFolder}` : '/'
+      const parts: string[] = []
+      if (r.imported.length > 0) parts.push(t('dashboard.importedCount', { count: r.imported.length, dest: where }))
+      if (r.skipped.length > 0) parts.push(t('dashboard.skippedCount', { count: r.skipped.length }))
+      if (parts.length > 0) setImportNotice(parts.join(' · '))
+    } catch (err) {
+      console.error('import failed:', err)
+      setImportNotice(t('dashboard.importFailed'))
+    }
+  }
+
   return (
     <>
+      <div
+        className="contents"
+        onDragEnter={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes('Files')) return
+          e.preventDefault()
+          dragDepthRef.current++
+          setDropActive(true)
+        }}
+        onDragOver={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes('Files')) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'copy'
+        }}
+        onDragLeave={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes('Files')) return
+          e.preventDefault()
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+          if (dragDepthRef.current === 0) setDropActive(false)
+        }}
+        onDrop={(e) => void handleDrop(e)}
+      >
       <WorkShell
         sidebar={
           <div className="flex h-full flex-col">
@@ -227,6 +302,26 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
               availableTags={tags}
               availableExts={availableExts}
             />
+            <button
+              type="button"
+              onClick={async () => {
+                if (rescanning) return
+                setRescanning(true)
+                try {
+                  await window.repsil.documents.rescan()
+                } catch (err) {
+                  console.error('rescan failed:', err)
+                } finally {
+                  setRescanning(false)
+                }
+              }}
+              disabled={rescanning}
+              className="rounded-md border border-border bg-bg-elevated/60 p-2 text-fg-muted hover:text-fg disabled:opacity-50"
+              aria-label={t('dashboard.rescan')}
+              title={t('dashboard.rescan')}
+            >
+              <RefreshCw className={cn('h-4 w-4', rescanning && 'animate-spin')} />
+            </button>
             <button
               type="button"
               onClick={() => setSyncOpen(true)}
@@ -322,6 +417,25 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
           />
         </React.Suspense>
       )}
+      {dropActive && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-accent/15 backdrop-blur-sm">
+          <div className="rounded-lg border-2 border-dashed border-accent bg-bg-surface/90 px-8 py-6 text-w-h2 font-semibold text-accent shadow-lg">
+            {selectedFolder
+              ? t('dashboard.dropToImportInto', { folder: selectedFolder })
+              : t('dashboard.dropToImport')}
+          </div>
+        </div>
+      )}
+      {importNotice && (
+        <div
+          className="fixed bottom-6 start-1/2 z-50 -translate-x-1/2 cursor-pointer rounded-md border border-border bg-bg-surface px-4 py-2 text-w-small text-fg shadow-lg"
+          onClick={() => setImportNotice(null)}
+          role="status"
+        >
+          {importNotice}
+        </div>
+      )}
+      </div>
     </>
   )
 }

@@ -216,6 +216,8 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
         setDoc(fresh)
         setForm(toForm(fresh))
         setOriginal(toForm(fresh))
+        setExtractedText(fresh.extracted_text ?? '')
+        setOriginalExtractedText(fresh.extracted_text ?? '')
         return
       }
       setTimeout(() => void poll(), POLL_INTERVAL_MS)

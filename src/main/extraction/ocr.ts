@@ -1,4 +1,4 @@
-import { createWorker, type Worker } from 'tesseract.js'
+import { createWorker, PSM, type Worker } from 'tesseract.js'
 import { app } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -53,6 +53,18 @@ async function getWorker(): Promise<Worker> {
         langPath: cfg.langPath,
         cachePath: cfg.cachePath,
         gzip: cfg.gzip
+      })
+      // PSM 1 = auto layout analysis WITH orientation/script detection. Costs
+      // a small amount of extra CPU per page but lets us handle rotated scans
+      // and mixed-script (Arabic+English) screenshots correctly without
+      // per-image config. user_defined_dpi=300 hints the LSTM model so it
+      // doesn't underscale screenshots and undersized scans.
+      // preserve_interword_spaces keeps Arabic word breaks intact instead of
+      // collapsing them, which the metadata guesser and FTS tokenizer rely on.
+      await w.setParameters({
+        tessedit_pageseg_mode: PSM.AUTO_OSD,
+        user_defined_dpi: '300',
+        preserve_interword_spaces: '1'
       })
       return w
     })().catch((err) => {

@@ -8,7 +8,7 @@ import {
   stopSync,
   syncStatus
 } from './sync/manager'
-import { emitMetaChanged } from './sync/bus'
+import { emitMetaChanged, onDeleted, onFileChanged, onMetaChanged } from './sync/bus'
 import type {
   AppSettings,
   DbStatus,
@@ -32,6 +32,8 @@ import { renderSnippet } from './search/snippet'
 import { getSettings, loadArchiveSettings, updateSettings } from './settings'
 import { getDb, openDb } from './db'
 import { bindQueue, drainPending, enqueueExtraction, queueStatus } from './extraction/queue'
+import { importExternalFiles, type ImportResult } from './fileops'
+import { reconcile } from './watcher/reconcile'
 import { startWatcher } from './watcher/fileWatcher'
 import type { DocumentRow } from './db/queries'
 
@@ -155,6 +157,33 @@ export function registerIpcHandlers(): void {
       const trimmed = text.trim()
       current.queries.setExtractedText.run({ id, extracted_text: trimmed || null })
       return true
+    }
+  )
+
+  ipcMain.handle('documents:rescan', async (): Promise<{ inserted: number; updated: number; removed: number; scanned: number }> => {
+    const current = getDb()
+    if (!current) return { inserted: 0, updated: 0, removed: 0, scanned: 0 }
+    // reconcile() emits documents:changed at the end iff anything changed, so
+    // the dashboard refreshes automatically without us doing extra plumbing.
+    const tally = await reconcile(current)
+    // Newly-inserted rows are extraction_status='pending'. drainPending()
+    // scans the DB for those and enqueues them; without this the rows surfaced
+    // only by reconcile (rescan button, periodic) would never get text
+    // extracted.
+    drainPending()
+    return tally
+  })
+
+  ipcMain.handle(
+    'documents:import',
+    async (
+      _evt,
+      sources: string[],
+      destFolderRel: string
+    ): Promise<ImportResult> => {
+      const current = getDb()
+      if (!current) return { imported: [], skipped: sources.map((s) => ({ source: s, reason: 'no archive open' })) }
+      return importExternalFiles(current, sources, destFolderRel)
     }
   )
 
@@ -316,6 +345,17 @@ export function registerIpcHandlers(): void {
       win.webContents.send('sync:changed', status)
     }
   })
+
+  // Push file-system / metadata changes to every window so the dashboard can
+  // refresh its result list when the watcher inserts, deletes, or updates a doc.
+  const broadcastDocsChanged = (): void => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('documents:changed')
+    }
+  }
+  onFileChanged(broadcastDocsChanged)
+  onDeleted(broadcastDocsChanged)
+  onMetaChanged(broadcastDocsChanged)
 
   ipcMain.handle('sync:host', async (): Promise<HostResult> => {
     try {

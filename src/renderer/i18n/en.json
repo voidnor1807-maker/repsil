@@ -37,7 +37,15 @@
     "indexing_other": "{{count}} indexing",
     "status_pending": "Indexing…",
     "status_failed": "Failed",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "rescan": "Rescan folder",
+    "dropToImport": "Drop files to add to the archive",
+    "dropToImportInto": "Drop files into {{folder}}",
+    "importedCount_one": "Imported 1 file into {{dest}}",
+    "importedCount_other": "Imported {{count}} files into {{dest}}",
+    "skippedCount_one": "1 skipped",
+    "skippedCount_other": "{{count}} skipped",
+    "importFailed": "Import failed"
   },
   "filters": {
     "button": "Filters",

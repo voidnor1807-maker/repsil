@@ -13,7 +13,10 @@ async function loadPdfjs(): Promise<typeof import('pdfjs-dist/legacy/build/pdf.m
   return pdfjsLib
 }
 
-const RENDER_SCALE = 2.0 // upscale for better OCR accuracy
+// 3.0 = ~225 effective DPI from a 75-DPI PDF. Higher gives the LSTM more
+// pixels per glyph (especially Arabic ligatures) at the cost of more memory
+// per page. Pages render in serial so peak memory is one canvas at a time.
+const RENDER_SCALE = 3.0
 const DEFAULT_MAX_PAGES = 200
 
 export interface PdfOcrResult {

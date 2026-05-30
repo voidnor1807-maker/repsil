@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type {
   AppSettings,
   DbStatus,
@@ -53,7 +53,33 @@ const api = {
     openExternal: (relPath: string): Promise<string> =>
       ipcRenderer.invoke('documents:openExternal', relPath),
     revealInFolder: (relPath: string): Promise<void> =>
-      ipcRenderer.invoke('documents:revealInFolder', relPath)
+      ipcRenderer.invoke('documents:revealInFolder', relPath),
+    /** Manual re-scan of the archive folder. Used as a recovery path when the
+     *  OS file-system watcher misses an event (it can happen on Windows). */
+    rescan: (): Promise<{ inserted: number; updated: number; removed: number; scanned: number }> =>
+      ipcRenderer.invoke('documents:rescan'),
+    /** Copy external files (drag from Explorer, etc.) into the archive under
+     *  destFolderRel ('' = root). Returns per-file outcome. */
+    import: (
+      sources: string[],
+      destFolderRel: string
+    ): Promise<{ imported: string[]; skipped: Array<{ source: string; reason: string }> }> =>
+      ipcRenderer.invoke('documents:import', sources, destFolderRel),
+    /** Electron 32+ no longer exposes File.path; renderer must resolve dropped
+     *  file paths through this bridge. Returns '' for non-file blobs. */
+    resolveDroppedPath: (file: File): string => {
+      try {
+        return webUtils.getPathForFile(file)
+      } catch {
+        return ''
+      }
+    },
+    /** Fires when the watcher or sync adds/removes/changes a document. */
+    onChanged: (cb: () => void): (() => void) => {
+      const listener = (): void => cb()
+      ipcRenderer.on('documents:changed', listener)
+      return () => ipcRenderer.removeListener('documents:changed', listener)
+    }
   },
   folders: {
     tree: (): Promise<FolderNode | null> => ipcRenderer.invoke('folders:tree')

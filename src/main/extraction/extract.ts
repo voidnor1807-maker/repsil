@@ -5,6 +5,7 @@ import type { RepsilDb } from '../db'
 import type { DocumentRow, ExtractionStatus } from '../db/queries'
 import { consumeMatch, consumeMatchBySize } from '../renameTracker'
 import { getSettings } from '../settings'
+import { emitMetaChanged } from '../sync/bus'
 import { OCR_IMAGE_EXTS } from '@shared/extensions'
 import { detectLanguage } from './language'
 import { guessMetadata, type MetadataGuess } from './metadata'
@@ -86,6 +87,7 @@ export async function extractOne(repsil: RepsilDb, id: number): Promise<Extracti
       ocr_pages_done: row.ocr_pages_done,
       ocr_pages_total: row.ocr_pages_total
     })
+    emitMetaChanged(row.rel_path)
     return 'done'
   }
 
@@ -161,6 +163,11 @@ export async function extractOne(repsil: RepsilDb, id: number): Promise<Extracti
   if (text) {
     applyMetadataGuess(repsil, row, guessMetadata(text, row.filename, { dateFormat: settings.dateFormat }))
   }
+
+  // Notify the renderer that this row's metadata/text changed so the dashboard
+  // list re-renders (title now reflects OCR/extraction output instead of the
+  // raw filename) and an open DocumentView can refresh.
+  emitMetaChanged(row.rel_path)
 
   return status
 }

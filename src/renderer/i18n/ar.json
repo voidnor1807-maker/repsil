@@ -37,7 +37,15 @@
     "indexing_other": "جارٍ فهرسة {{count}}",
     "status_pending": "جارٍ الفهرسة…",
     "status_failed": "فشل",
-    "loadMore": "تحميل المزيد"
+    "loadMore": "تحميل المزيد",
+    "rescan": "إعادة فحص المجلد",
+    "dropToImport": "أفلت الملفات لإضافتها إلى الأرشيف",
+    "dropToImportInto": "أفلت الملفات في {{folder}}",
+    "importedCount_one": "تم استيراد ملف واحد إلى {{dest}}",
+    "importedCount_other": "تم استيراد {{count}} ملفات إلى {{dest}}",
+    "skippedCount_one": "تم تخطي ١",
+    "skippedCount_other": "تم تخطي {{count}}",
+    "importFailed": "فشل الاستيراد"
   },
   "filters": {
     "button": "تصفية",
