@@ -3,6 +3,7 @@ import { basename, join } from 'node:path'
 import type { RepsilDb } from '../db'
 import type { DocumentRow } from '../db/queries'
 import { inheritsFolderFlag } from '../folders'
+import { emitFileChanged } from '../sync/bus'
 import { extOf, isIgnoredRel, toRel } from './paths'
 
 /**
@@ -83,6 +84,15 @@ export async function reconcile(repsil: RepsilDb): Promise<{
   // Note: enqueueing for inserted/updated rows is the queue's job — see
   // drainPending(). Reconcile leaves them in extraction_status='pending' and
   // the queue drains them on the next tick.
+
+  // Fire ONE bus event when anything changed. The IPC layer subscribes and
+  // broadcasts documents:changed to all windows, so the dashboard refreshes
+  // its list. Without this, files surfaced only by reconcile (because chokidar
+  // missed the FS event, or because the file was added while the watcher was
+  // down) would sit invisible until the user changed the search query.
+  if (inserted > 0 || updated > 0 || removed > 0) {
+    emitFileChanged('')
+  }
 
   return { inserted, updated, removed, scanned: onDisk.size }
 }

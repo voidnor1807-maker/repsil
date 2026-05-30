@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs'
 import { basename } from 'node:path'
 import type { RepsilDb } from '../db'
 import type { DocumentRow } from '../db/queries'
-import { enqueueExtraction } from '../extraction/queue'
+import { drainPending, enqueueExtraction } from '../extraction/queue'
 import { inheritsFolderFlag } from '../folders'
 import { recordDeletion } from '../renameTracker'
 import { emitDeleted, emitFileChanged } from '../sync/bus'
@@ -121,8 +121,14 @@ export async function startWatcher(repsil: RepsilDb): Promise<WatcherHandle> {
 
   // Periodic full reconcile — catches events the OS may have dropped
   // (antivirus, network drives, OneDrive). Plan: every 10 minutes.
+  // drainPending after each one so rows inserted by reconcile (not the live
+  // watcher) actually get their text extracted.
   const reconcileTimer = setInterval(() => {
-    reconcile(repsil).catch((err) => console.error('Periodic reconcile failed:', err))
+    reconcile(repsil)
+      .then(() => {
+        drainPending()
+      })
+      .catch((err) => console.error('Periodic reconcile failed:', err))
   }, 10 * 60 * 1000)
 
   const handle: WatcherHandle = {
