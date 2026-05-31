@@ -65,10 +65,11 @@
     --accent-hover: 0 0 0; /* pure black for the press/hover state */
     --accent-soft: 96 92 80; /* #605C50 — for muted accent text */
     --accent-glow: 220 217 205; /* #DCD9CD — for soft tints/selections */
-    /* Cream/near-white text on a near-black accent button so labels stay
-     * crisp at small sizes. Keeping this independent of --bg means changing
-     * the page canvas later won't accidentally erase button labels. */
-    --accent-fg: 250 249 245;
+    /* Pure white text on near-black accent surfaces — small-size labels
+     * (Save button icon + text at 12px) need max contrast. Keeping this
+     * independent of --bg means changing the canvas later won't erase
+     * button labels. */
+    --accent-fg: 255 255 255;
 
     --destructive: 200 30 70; /* #C81E46 */
     --destructive-hover: 168 24 58;
