@@ -53,12 +53,14 @@
     --fg-muted: 96 92 80; /* #605C50 metadata, hints */
     --fg-subtle: 140 135 117; /* #8C8775 placeholders */
 
-    /* Accent stays cyan for brand continuity but darkens so it reads as
-     * "accent" rather than "fade" on a cream background. */
-    --accent: 8 145 178; /* #0891B2 */
-    --accent-hover: 14 116 144; /* #0E7490 */
-    --accent-soft: 34 211 238; /* #22D3EE */
-    --accent-glow: 165 243 252; /* #A5F3FC */
+    /* Monochrome accent — every interactive surface (selected pills, primary
+     * buttons, focus rings) reads as warm near-black "ink" on the cream
+     * canvas. Matches Claude's editorial / manuscript feel and keeps the UI
+     * from looking chromatic against the cream. */
+    --accent: 31 30 26; /* #1F1E1A same warm near-black as text */
+    --accent-hover: 0 0 0; /* pure black for the press/hover state */
+    --accent-soft: 96 92 80; /* #605C50 — for muted accent text */
+    --accent-glow: 220 217 205; /* #DCD9CD — for soft tints/selections */
 
     --destructive: 200 30 70; /* #C81E46 */
     --destructive-hover: 168 24 58;
@@ -66,7 +68,7 @@
     --success-hover: 11 130 90;
     --warning: 217 119 6;
     --warning-hover: 180 99 5;
-    --info: 8 145 178;
+    --info: 31 30 26; /* status-info also goes monochrome in light mode */
 
     --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.6), 0 8px 24px rgba(31, 30, 26, 0.08);
   }
