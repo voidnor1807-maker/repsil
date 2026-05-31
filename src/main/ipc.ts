@@ -581,7 +581,7 @@ function runFilteredSearch(
     sql = `
       SELECT d.id, d.rel_path, d.filename, d.title, d.doc_date,
              d.extraction_status, d.error_message,
-             snippet(documents_fts, 4, char(1), char(2), '…', 16) AS snippet
+             snippet(documents_fts, -1, char(1), char(2), '…', 16) AS snippet
         FROM documents_fts
         JOIN documents d ON d.id = documents_fts.rowid
        WHERE ${where.join(' AND ')}

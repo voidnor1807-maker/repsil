@@ -263,7 +263,7 @@ export function createQueries(db: Database.Database) {
 
     searchDocuments: db.prepare<string, SearchHit>(`
       SELECT d.id, d.rel_path, d.filename, d.title, d.doc_date,
-             snippet(documents_fts, 4, '<mark>', '</mark>', '…', 16) AS snippet
+             snippet(documents_fts, -1, '<mark>', '</mark>', '…', 16) AS snippet
         FROM documents_fts
         JOIN documents d ON d.id = documents_fts.rowid
        WHERE documents_fts MATCH ?

@@ -132,10 +132,78 @@ ALTER TABLE tombstones ADD COLUMN snap_user_edited_fields TEXT;
 CREATE INDEX IF NOT EXISTS idx_tombstones_trash_id ON tombstones(trash_id);
 `
 
+// Make tags searchable via the same FTS5 path that already handles title,
+// source, notes, and extracted text. We denormalize the tag names onto the
+// documents row as `tags_text` so the existing AI/AU triggers carry them
+// through to FTS without needing a join inside the FTS triggers. Triggers
+// on document_tags keep tags_text in sync — adding or removing a tag fires
+// an UPDATE on documents which cascades into documents_au → FTS refresh.
+const M6_TAGS_IN_FTS = `
+ALTER TABLE documents ADD COLUMN tags_text TEXT;
+
+UPDATE documents SET tags_text = (
+  SELECT group_concat(t.name, ' ')
+    FROM tags t
+    JOIN document_tags dt ON dt.tag_id = t.id
+   WHERE dt.document_id = documents.id
+);
+
+DROP TRIGGER IF EXISTS documents_ai;
+DROP TRIGGER IF EXISTS documents_ad;
+DROP TRIGGER IF EXISTS documents_au;
+DROP TABLE IF EXISTS documents_fts;
+
+CREATE VIRTUAL TABLE documents_fts USING fts5(
+  rel_path, title, source, notes, extracted_text, tags_text,
+  content='documents',
+  content_rowid='id',
+  tokenize='unicode61 remove_diacritics 2'
+);
+
+INSERT INTO documents_fts(rowid, rel_path, title, source, notes, extracted_text, tags_text)
+SELECT id, rel_path, title, source, notes, extracted_text, tags_text FROM documents;
+
+CREATE TRIGGER documents_ai AFTER INSERT ON documents BEGIN
+  INSERT INTO documents_fts(rowid, rel_path, title, source, notes, extracted_text, tags_text)
+  VALUES (new.id, new.rel_path, new.title, new.source, new.notes, new.extracted_text, new.tags_text);
+END;
+
+CREATE TRIGGER documents_ad AFTER DELETE ON documents BEGIN
+  INSERT INTO documents_fts(documents_fts, rowid, rel_path, title, source, notes, extracted_text, tags_text)
+  VALUES('delete', old.id, old.rel_path, old.title, old.source, old.notes, old.extracted_text, old.tags_text);
+END;
+
+CREATE TRIGGER documents_au AFTER UPDATE ON documents BEGIN
+  INSERT INTO documents_fts(documents_fts, rowid, rel_path, title, source, notes, extracted_text, tags_text)
+  VALUES('delete', old.id, old.rel_path, old.title, old.source, old.notes, old.extracted_text, old.tags_text);
+  INSERT INTO documents_fts(rowid, rel_path, title, source, notes, extracted_text, tags_text)
+  VALUES (new.id, new.rel_path, new.title, new.source, new.notes, new.extracted_text, new.tags_text);
+END;
+
+CREATE TRIGGER document_tags_ai AFTER INSERT ON document_tags BEGIN
+  UPDATE documents SET tags_text = (
+    SELECT group_concat(t.name, ' ')
+      FROM tags t
+      JOIN document_tags dt ON dt.tag_id = t.id
+     WHERE dt.document_id = new.document_id
+  ) WHERE id = new.document_id;
+END;
+
+CREATE TRIGGER document_tags_ad AFTER DELETE ON document_tags BEGIN
+  UPDATE documents SET tags_text = (
+    SELECT group_concat(t.name, ' ')
+      FROM tags t
+      JOIN document_tags dt ON dt.tag_id = t.id
+     WHERE dt.document_id = old.document_id
+  ) WHERE id = old.document_id;
+END;
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: M1_INITIAL },
   { version: 2, sql: M2_EXTRACTION_REPORTING },
   { version: 3, sql: M3_APP_SETTINGS },
   { version: 4, sql: M4_SYNC },
-  { version: 5, sql: M5_SHARED_TRASH }
+  { version: 5, sql: M5_SHARED_TRASH },
+  { version: 6, sql: M6_TAGS_IN_FTS }
 ]
