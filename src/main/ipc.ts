@@ -550,7 +550,12 @@ function runFilteredSearch(
     })
   }
   if (filters.folderRel) {
-    where.push(`d.rel_path LIKE @folderPrefix || '%'`)
+    // Direct children only — selecting "New folder" must not list files inside
+    // "New folder/sub/...". Matches the semantics of listDocumentsInFolder so
+    // the dashboard view mirrors VS Code's explorer (one level at a time).
+    where.push(
+      `d.rel_path LIKE @folderPrefix || '%' AND instr(substr(d.rel_path, length(@folderPrefix) + 1), '/') = 0`
+    )
     params.folderPrefix = filters.folderRel.replace(/\/?$/, '/')
   }
 
