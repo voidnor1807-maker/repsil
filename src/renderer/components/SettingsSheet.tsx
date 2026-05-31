@@ -116,11 +116,6 @@ export function SettingsSheet({
                   onChange={(v) => void update({ theme: v as Theme })}
                 />
               </Row>
-              {settings.theme === 'light' && (
-                <p className="mt-1 text-w-small text-warning">
-                  {t('settings.lightModeWarning')}
-                </p>
-              )}
             </Section>
 
             <Section title={t('settings.documents')}>

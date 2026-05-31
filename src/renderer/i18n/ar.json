@@ -143,8 +143,7 @@
     "dateFormat": "صيغة التاريخ",
     "dateDmy": "يوم / شهر",
     "dateMdy": "شهر / يوم",
-    "pdfOcrMaxPages": "حد صفحات OCR للـ PDF",
-    "lightModeWarning": "الوضع الفاتح جاهز تقنياً لكن لوحة الألوان غير مكتملة — توقع بعض النقص حتى مرحلة الصقل في المرحلة الثالثة."
+    "pdfOcrMaxPages": "حد صفحات OCR للـ PDF"
   },
   "folder": {
     "enableOcr": "تفعيل OCR للملفات الجديدة",

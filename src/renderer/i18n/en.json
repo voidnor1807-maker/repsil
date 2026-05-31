@@ -143,8 +143,7 @@
     "dateFormat": "Date format",
     "dateDmy": "Day / Month",
     "dateMdy": "Month / Day",
-    "pdfOcrMaxPages": "PDF OCR page limit",
-    "lightModeWarning": "Light mode is wired in but the color palette is unfinished — expect rough edges until Phase 3 polish."
+    "pdfOcrMaxPages": "PDF OCR page limit"
   },
   "folder": {
     "enableOcr": "Enable OCR for new files",

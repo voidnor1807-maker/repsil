@@ -10,48 +10,46 @@ const config: Config = {
       padding: '2rem'
     },
     extend: {
+      // Every palette slot now reads from a CSS variable defined in
+      // [globals.css](src/renderer/theme/globals.css). The light/dark class
+      // on <html> swaps the variable values — no Tailwind variants needed at
+      // call sites. The `<alpha-value>` placeholder is what lets `bg-bg/60`
+      // etc. still work with opacity modifiers.
       colors: {
-        // Layered background system (deepest → most elevated)
         bg: {
-          DEFAULT: '#0a0d14',
-          surface: '#0f1320',
-          elevated: '#161b2c'
+          DEFAULT: 'rgb(var(--bg) / <alpha-value>)',
+          surface: 'rgb(var(--bg-surface) / <alpha-value>)',
+          elevated: 'rgb(var(--bg-elevated) / <alpha-value>)'
         },
         border: {
-          DEFAULT: '#1f2540',
-          subtle: '#141a2a'
+          DEFAULT: 'rgb(var(--border) / <alpha-value>)',
+          subtle: 'rgb(var(--border-subtle) / <alpha-value>)'
         },
-
-        // Text
         fg: {
-          DEFAULT: '#f1f5f9',
-          muted: '#94a3b8',
-          subtle: '#64748b'
+          DEFAULT: 'rgb(var(--fg) / <alpha-value>)',
+          muted: 'rgb(var(--fg-muted) / <alpha-value>)',
+          subtle: 'rgb(var(--fg-subtle) / <alpha-value>)'
         },
-
-        // Primary accent — solid cyan, no gradient
         accent: {
-          DEFAULT: '#22d3ee',
-          hover: '#06b6d4',
-          soft: '#67e8f9',
-          glow: '#0891b2'
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          hover: 'rgb(var(--accent-hover) / <alpha-value>)',
+          soft: 'rgb(var(--accent-soft) / <alpha-value>)',
+          glow: 'rgb(var(--accent-glow) / <alpha-value>)'
         },
-
-        // Semantic — muted, dark-tuned
         destructive: {
-          DEFAULT: '#ff274c',
-          hover: '#e51c41'
+          DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',
+          hover: 'rgb(var(--destructive-hover) / <alpha-value>)'
         },
         success: {
-          DEFAULT: '#10b981',
-          hover: '#059669'
+          DEFAULT: 'rgb(var(--success) / <alpha-value>)',
+          hover: 'rgb(var(--success-hover) / <alpha-value>)'
         },
         warning: {
-          DEFAULT: '#f59e0b',
-          hover: '#d97706'
+          DEFAULT: 'rgb(var(--warning) / <alpha-value>)',
+          hover: 'rgb(var(--warning-hover) / <alpha-value>)'
         },
         info: {
-          DEFAULT: '#22d3ee'
+          DEFAULT: 'rgb(var(--info) / <alpha-value>)'
         }
       },
       fontFamily: {
