@@ -22,6 +22,12 @@ export interface PromptDialogProps {
   confirmLabel?: string
   cancelLabel?: string
   validate?: (value: string) => string | null
+  /** How the input is selected when the dialog opens. 'all' (default) is the
+   *  classic behavior — the whole value is selected so typing replaces it.
+   *  'stem' selects only up to the last `.`, matching how Windows Explorer
+   *  rename behaves so typing replaces the stem and the extension stays
+   *  intact. Pass 'stem' for filename rename dialogs. */
+  selectMode?: 'all' | 'stem'
   onCancel: () => void
   onConfirm: (value: string) => void | Promise<void>
 }
@@ -35,6 +41,7 @@ export function PromptDialog({
   confirmLabel,
   cancelLabel,
   validate,
+  selectMode = 'all',
   onCancel,
   onConfirm
 }: PromptDialogProps): JSX.Element {
@@ -49,15 +56,23 @@ export function PromptDialog({
     if (open) {
       setValue(initialValue)
       setSubmitting(false)
-      // Focus + select after Radix has actually mounted the content.
+      // Focus + select after Radix has actually mounted the content. For
+      // selectMode='stem' we cover only the part up to the last '.' so the
+      // extension is preserved by default — matching Explorer's rename UX.
       requestAnimationFrame(() => {
         const el = inputRef.current
         if (!el) return
         el.focus()
-        el.select()
+        if (selectMode === 'stem') {
+          const dot = initialValue.lastIndexOf('.')
+          const end = dot > 0 ? dot : initialValue.length
+          el.setSelectionRange(0, end)
+        } else {
+          el.select()
+        }
       })
     }
-  }, [open, initialValue])
+  }, [open, initialValue, selectMode])
 
   const validationError = validate ? validate(value) : null
   const trimmed = value.trim()

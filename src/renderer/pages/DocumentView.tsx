@@ -465,6 +465,7 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
         description={t('document.renamePrompt')}
         initialValue={doc.filename}
         confirmLabel={t('document.rename')}
+        selectMode="stem"
         validate={(v) => {
           const trimmed = v.trim()
           if (!trimmed) return t('validate.required')
@@ -477,11 +478,21 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
           setRenameError(null)
         }}
         onConfirm={async (next) => {
-          if (next === doc.filename) {
+          // Safety net for the rename dialog: if the user wiped the extension,
+          // restore the original one. The preview path (isPdf/isImage/isText)
+          // and the extraction pipeline all key off the extension, so dropping
+          // it silently breaks previews — the screenshot bug. Trust an explicit
+          // new extension though, since the user may be intentionally changing
+          // the file type (foo.txt → foo.md).
+          const newDot = next.lastIndexOf('.')
+          const hasExt = newDot > 0 && newDot < next.length - 1
+          const oldDot = doc.filename.lastIndexOf('.')
+          const finalName = !hasExt && oldDot > 0 ? next + doc.filename.slice(oldDot) : next
+          if (finalName === doc.filename) {
             setRenameOpen(false)
             return
           }
-          const result = await window.repsil.documents.rename(doc.rel_path, next)
+          const result = await window.repsil.documents.rename(doc.rel_path, finalName)
           if (!result.ok) {
             setRenameError(result.error ?? 'failed')
             alert(t('document.renameFailed', { reason: result.error ?? '' }))

@@ -812,6 +812,7 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
         description={t('document.renamePrompt')}
         initialValue={renameTarget?.current ?? ''}
         confirmLabel={t('row.rename')}
+        selectMode="stem"
         validate={(v) => {
           const trimmed = v.trim()
           if (!trimmed) return t('validate.required')
@@ -822,11 +823,19 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
         onCancel={() => setRenameTarget(null)}
         onConfirm={async (next) => {
           if (!renameTarget) return
-          if (next === renameTarget.current) {
+          // Same extension-preservation safety net as the DocumentView rename
+          // dialog. Without it, dropping the extension silently breaks the
+          // preview and the extraction pipeline for the renamed file.
+          const newDot = next.lastIndexOf('.')
+          const hasExt = newDot > 0 && newDot < next.length - 1
+          const oldDot = renameTarget.current.lastIndexOf('.')
+          const finalName =
+            !hasExt && oldDot > 0 ? next + renameTarget.current.slice(oldDot) : next
+          if (finalName === renameTarget.current) {
             setRenameTarget(null)
             return
           }
-          const r = await window.repsil.documents.rename(renameTarget.rel, next)
+          const r = await window.repsil.documents.rename(renameTarget.rel, finalName)
           if (!r.ok) {
             setOpNotice(t('document.renameFailed', { reason: r.error ?? '' }))
           }
