@@ -10,6 +10,7 @@ import { startWatcher, stopWatcher } from './watcher/fileWatcher'
 import { stopSync } from './sync/manager'
 import { sweepTrash } from './trash'
 import { getDb } from './db'
+import { initAutoUpdate } from './updater'
 
 registerProtocolSchemes()
 
@@ -93,6 +94,7 @@ app.whenReady().then(async () => {
   tick()
   trashSweepTimer = setInterval(tick, TRASH_SWEEP_INTERVAL_MS)
   createWindow()
+  initAutoUpdate()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

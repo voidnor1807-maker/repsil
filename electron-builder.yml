@@ -1,8 +1,15 @@
-# Phase 3 will flesh this out (icons, NSIS config, signing).
 appId: com.repsil.app
 productName: Repsil
 directories:
   output: release
+win:
+  icon: build/icon.ico
+# Auto-update feed. `npm run release` (with GH_TOKEN set) uploads the installer
+# + latest.yml here; the packaged app reads it to update itself. See BUILD.md.
+publish:
+  provider: github
+  owner: voidnor1807-maker
+  repo: repsil
 files:
   - out/**
   - resources/**
