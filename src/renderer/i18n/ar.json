@@ -119,6 +119,8 @@
     "revealInFolder": "إظهار في المجلد",
     "extractionFailed": "فشل الاستخراج.",
     "retry": "إعادة المحاولة",
+    "expandText": "توسيع لملء النافذة",
+    "collapseText": "العودة إلى العرض المنقسم",
     "fields": {
       "title": "العنوان",
       "docDate": "تاريخ المستند",

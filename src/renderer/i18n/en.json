@@ -119,6 +119,8 @@
     "revealInFolder": "Show in folder",
     "extractionFailed": "Extraction failed.",
     "retry": "Retry",
+    "expandText": "Expand to full view",
+    "collapseText": "Back to split view",
     "fields": {
       "title": "Title",
       "docDate": "Document date",

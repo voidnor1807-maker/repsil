@@ -7,6 +7,8 @@ import {
   FileText,
   FolderOpen,
   Loader2,
+  Maximize2,
+  Minimize2,
   Pencil,
   RotateCw,
   ScanText,
@@ -67,6 +69,9 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
   const [tagSuggestions, setTagSuggestions] = React.useState<string[]>([])
   const [extractedText, setExtractedText] = React.useState('')
   const [originalExtractedText, setOriginalExtractedText] = React.useState('')
+  // When true, the extracted-text panel takes the whole DocumentView width;
+  // preview + metadata are hidden. Toggled from the panel header.
+  const [textExpanded, setTextExpanded] = React.useState(false)
   // Raw text/markdown preview, fetched from the repsil-file:// scheme.
   const [textPreview, setTextPreview] = React.useState<string | null>(null)
   const [textTruncated, setTextTruncated] = React.useState(false)
@@ -333,6 +338,7 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
       )}
 
       <div className="flex min-h-0 flex-1">
+        {!textExpanded && (
         <div className="flex min-w-0 flex-1 items-stretch justify-center bg-bg-elevated/30">
           {isPdf && (
             <iframe
@@ -372,8 +378,15 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
             </div>
           )}
         </div>
+        )}
 
-        <aside className="flex w-96 shrink-0 flex-col border-s border-border bg-bg-surface">
+        <aside
+          className={cn(
+            'flex shrink-0 flex-col bg-bg-surface',
+            textExpanded ? 'min-w-0 flex-1 border-s-0' : 'w-[28rem] border-s border-border'
+          )}
+        >
+          {!textExpanded && (
           <section className="border-b border-border p-4">
             <h2 className="mb-3 text-w-h2 font-semibold text-fg">{t('document.metadata')}</h2>
             <Field
@@ -411,15 +424,29 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
               placeholder={t('document.tagsPlaceholder')}
             />
           </section>
+          )}
 
           <section className="flex min-h-0 flex-1 flex-col p-4">
             <h2 className="mb-2 flex items-center gap-2 text-w-h2 font-semibold text-fg">
-              {t('document.extractedText')}
+              <span>{t('document.extractedText')}</span>
               {doc.language && (
                 <span className="rounded-pill border border-border bg-bg-elevated/60 px-2 py-0.5 text-w-small font-normal text-fg-muted">
                   {doc.language}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => setTextExpanded((v) => !v)}
+                title={textExpanded ? t('document.collapseText') : t('document.expandText')}
+                aria-label={textExpanded ? t('document.collapseText') : t('document.expandText')}
+                className="ms-auto inline-flex h-7 w-7 items-center justify-center rounded text-fg-muted hover:bg-bg-elevated hover:text-fg"
+              >
+                {textExpanded ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
+              </button>
             </h2>
             <textarea
               dir={doc.language === 'ar' ? 'rtl' : 'ltr'}
