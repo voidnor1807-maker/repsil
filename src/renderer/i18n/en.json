@@ -89,7 +89,7 @@
     "tags": "Tags",
     "matchAll": "Match all",
     "matchAny": "Match any",
-    "folder": "Folder",
+    "folder": "Search in folder",
     "anyFolder": "Anywhere in the archive"
   },
   "trash": {

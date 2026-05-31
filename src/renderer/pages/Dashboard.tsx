@@ -92,18 +92,23 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   const [renameTarget, setRenameTarget] = React.useState<{ rel: string; current: string } | null>(null)
   const [newFolderParent, setNewFolderParent] = React.useState<string | null>(null)
 
-  // Effective filters layer two folder-scope sources:
-  //   - the filter panel's folder picker (recursive subtree search) — when set,
-  //     it WINS and the sidebar selection is ignored. Picking a folder here is
-  //     an explicit "narrow my search to this subtree" request.
-  //   - otherwise the sidebar selection drives an explorer-style listing of
-  //     just that folder's direct children.
+  // Listing vs. search are two different modes with two different folder sources:
+  //   - LISTING (no query): the sidebar always owns the scope. Shows direct
+  //     children of the selected folder. The filter-panel folder is ignored
+  //     here — it would feel wrong for picking a search filter to suddenly
+  //     swap out the folder the user is browsing.
+  //   - SEARCH (query typed): the sidebar is for browsing, not for scoping
+  //     searches. The filter-panel folder (if set) narrows the search to that
+  //     subtree recursively; otherwise the search runs across the whole archive.
   const effectiveFilters: Filters = React.useMemo(() => {
-    if (filters.folderRel) {
-      return { ...filters, folderRecursive: filters.folderRecursive ?? true }
+    const hasQuery = query.trim().length > 0
+    if (hasQuery) {
+      return filters.folderRel
+        ? { ...filters, folderRecursive: true }
+        : { ...filters, folderRel: null, folderRecursive: false }
     }
     return { ...filters, folderRel: selectedFolder || null, folderRecursive: false }
-  }, [filters, selectedFolder])
+  }, [filters, selectedFolder, query])
 
   // Debounced search (page 0). Pagination "load more" handled separately.
   React.useEffect(() => {
