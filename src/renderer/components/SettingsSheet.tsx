@@ -185,7 +185,7 @@ function Segmented<V extends string>({ options, value, onChange }: SegmentedProp
           onClick={() => onChange(o.value)}
           className={cn(
             'rounded px-3 py-1 text-w-small transition-colors',
-            value === o.value ? 'bg-accent text-accent-fg' : 'text-fg-muted hover:text-fg'
+            value === o.value ? 'bg-accent text-white dark:text-bg' : 'text-fg-muted hover:text-fg'
           )}
         >
           {o.label}

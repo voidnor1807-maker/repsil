@@ -135,7 +135,7 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
                   onClick={() => setTab(v)}
                   className={cn(
                     'flex-1 rounded px-3 py-1.5 text-w-small transition-colors',
-                    tab === v ? 'bg-accent text-accent-fg' : 'text-fg-muted hover:text-fg'
+                    tab === v ? 'bg-accent text-white dark:text-bg' : 'text-fg-muted hover:text-fg'
                   )}
                 >
                   {t(`sync.${v}`)}
@@ -180,7 +180,7 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
                     type="button"
                     onClick={() => void startHosting()}
                     disabled={busy || noArchive}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-w-body text-accent-fg disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-w-body text-white dark:text-bg disabled:opacity-50"
                   >
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Radio className="h-4 w-4" />}
                     {t('sync.startHosting')}
@@ -213,7 +213,7 @@ export function SyncSheet({ open, onOpenChange, settings, onSettingsChange }: Sy
                       type="button"
                       onClick={() => void join()}
                       disabled={busy || noArchive || !code.trim()}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-w-body text-accent-fg disabled:opacity-50"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-w-body text-white dark:text-bg disabled:opacity-50"
                     >
                       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
                       {t('sync.connect')}
