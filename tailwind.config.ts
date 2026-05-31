@@ -34,7 +34,8 @@ const config: Config = {
           DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
           hover: 'rgb(var(--accent-hover) / <alpha-value>)',
           soft: 'rgb(var(--accent-soft) / <alpha-value>)',
-          glow: 'rgb(var(--accent-glow) / <alpha-value>)'
+          glow: 'rgb(var(--accent-glow) / <alpha-value>)',
+          fg: 'rgb(var(--accent-fg) / <alpha-value>)'
         },
         destructive: {
           DEFAULT: 'rgb(var(--destructive) / <alpha-value>)',

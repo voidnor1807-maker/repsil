@@ -80,7 +80,7 @@ export function SearchFilters({
           <Filter className="h-3.5 w-3.5" />
           {t('filters.button')}
           {activeCount > 0 && (
-            <span className="rounded-pill bg-accent px-1.5 py-0.5 text-[10px] font-medium text-bg">
+            <span className="rounded-pill bg-accent px-1.5 py-0.5 text-[10px] font-medium text-accent-fg">
               {activeCount}
             </span>
           )}

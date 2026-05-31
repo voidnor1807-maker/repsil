@@ -25,6 +25,10 @@
     --accent-hover: 6 182 212;
     --accent-soft: 103 232 249;
     --accent-glow: 8 145 178;
+    /* Foreground color to use ON an accent surface (e.g. text/icon on a
+     * primary filled button). Picked to give strong contrast against
+     * --accent without relying on --bg by indirection. */
+    --accent-fg: 10 13 20;
     --destructive: 255 39 76;
     --destructive-hover: 229 28 65;
     --success: 16 185 129;
@@ -61,6 +65,10 @@
     --accent-hover: 0 0 0; /* pure black for the press/hover state */
     --accent-soft: 96 92 80; /* #605C50 — for muted accent text */
     --accent-glow: 220 217 205; /* #DCD9CD — for soft tints/selections */
+    /* Cream/near-white text on a near-black accent button so labels stay
+     * crisp at small sizes. Keeping this independent of --bg means changing
+     * the page canvas later won't accidentally erase button labels. */
+    --accent-fg: 250 249 245;
 
     --destructive: 200 30 70; /* #C81E46 */
     --destructive-hover: 168 24 58;
