@@ -553,10 +553,16 @@ function runFilteredSearch(
     // Direct children only — selecting "New folder" must not list files inside
     // "New folder/sub/...". Matches the semantics of listDocumentsInFolder so
     // the dashboard view mirrors VS Code's explorer (one level at a time).
+    // Prefix length is precomputed in JS rather than `length(@folderPrefix)`
+    // in SQL because better-sqlite3 binds parameters once per call and some
+    // function-context bindings turn into NULL — using a plain literal int
+    // sidesteps that entire class of edge case.
+    const folderPrefix = filters.folderRel.replace(/\/?$/, '/')
     where.push(
-      `d.rel_path LIKE @folderPrefix || '%' AND instr(substr(d.rel_path, length(@folderPrefix) + 1), '/') = 0`
+      `d.rel_path LIKE @folderPrefix || '%' AND instr(substr(d.rel_path, @folderPrefixLen + 1), '/') = 0`
     )
-    params.folderPrefix = filters.folderRel.replace(/\/?$/, '/')
+    params.folderPrefix = folderPrefix
+    params.folderPrefixLen = folderPrefix.length
   }
 
   let sql: string
