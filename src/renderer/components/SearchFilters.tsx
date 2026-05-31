@@ -4,25 +4,37 @@ import { Filter, X } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import type { SearchFilters as Filters, TagWithUsage } from '@shared/types'
 
+/** Flattened folder entry for the panel's folder picker. `depth` controls the
+ *  indent in the dropdown label; `rel` is the archive-relative path that gets
+ *  written into the filter. */
+export interface FolderChoice {
+  rel: string
+  name: string
+  depth: number
+}
+
 interface SearchFiltersProps {
   value: Filters
   onChange: (next: Filters) => void
   availableTags: TagWithUsage[]
   availableExts: string[]
+  availableFolders: FolderChoice[]
 }
 
 export function SearchFilters({
   value,
   onChange,
   availableTags,
-  availableExts
+  availableExts,
+  availableFolders
 }: SearchFiltersProps): JSX.Element {
   const { t } = useTranslation()
   const activeCount =
     (value.dateFrom ? 1 : 0) +
     (value.dateTo ? 1 : 0) +
     (value.exts?.length ?? 0) +
-    (value.tagIds?.length ?? 0)
+    (value.tagIds?.length ?? 0) +
+    (value.folderRel ? 1 : 0)
 
   const setDateFrom = (v: string): void => onChange({ ...value, dateFrom: v || null })
   const setDateTo = (v: string): void => onChange({ ...value, dateTo: v || null })
@@ -37,6 +49,20 @@ export function SearchFilters({
     if (set.has(id)) set.delete(id)
     else set.add(id)
     onChange({ ...value, tagIds: [...set] })
+  }
+  const setFolder = (rel: string): void => {
+    // Empty string from the <select> sentinel means "any folder" — clear both
+    // the rel and the recursive flag so the filter is a no-op.
+    if (rel === '') {
+      const { folderRel: _r, folderRecursive: _rec, ...rest } = value
+      void _r
+      void _rec
+      onChange(rest)
+      return
+    }
+    // A folder picked here is always recursive — the panel filter exists to
+    // narrow a search across a subtree, not to mimic the sidebar's listing.
+    onChange({ ...value, folderRel: rel, folderRecursive: true })
   }
   const clearAll = (): void => onChange({})
 
@@ -99,6 +125,26 @@ export function SearchFilters({
               />
             </div>
           </section>
+
+          {availableFolders.length > 0 && (
+            <section className="mb-4">
+              <div className="mb-1.5 text-fg-muted">{t('filters.folder')}</div>
+              <select
+                value={value.folderRel ?? ''}
+                onChange={(e) => setFolder(e.target.value)}
+                dir="ltr"
+                className="w-full rounded border border-border bg-bg-elevated/60 px-2 py-1 text-fg"
+              >
+                <option value="">{t('filters.anyFolder')}</option>
+                {availableFolders.map((f) => (
+                  <option key={f.rel} value={f.rel}>
+                    {'  '.repeat(f.depth)}
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </section>
+          )}
 
           {availableExts.length > 0 && (
             <section className="mb-4">

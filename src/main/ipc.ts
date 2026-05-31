@@ -550,19 +550,26 @@ function runFilteredSearch(
     })
   }
   if (filters.folderRel) {
-    // Direct children only — selecting "New folder" must not list files inside
-    // "New folder/sub/...". Matches the semantics of listDocumentsInFolder so
-    // the dashboard view mirrors VS Code's explorer (one level at a time).
+    // Two scope modes:
+    //   - folderRecursive=true   → everything under the folder (subtree search,
+    //                              what the filter panel's "Folder" picker uses).
+    //   - folderRecursive=false  → direct children only (sidebar's explorer
+    //                              listing). Matches listDocumentsInFolder so
+    //                              the two paths agree.
     // Prefix length is precomputed in JS rather than `length(@folderPrefix)`
     // in SQL because better-sqlite3 binds parameters once per call and some
     // function-context bindings turn into NULL — using a plain literal int
     // sidesteps that entire class of edge case.
     const folderPrefix = filters.folderRel.replace(/\/?$/, '/')
-    where.push(
-      `d.rel_path LIKE @folderPrefix || '%' AND instr(substr(d.rel_path, @folderPrefixLen + 1), '/') = 0`
-    )
+    if (filters.folderRecursive) {
+      where.push(`d.rel_path LIKE @folderPrefix || '%'`)
+    } else {
+      where.push(
+        `d.rel_path LIKE @folderPrefix || '%' AND instr(substr(d.rel_path, @folderPrefixLen + 1), '/') = 0`
+      )
+      params.folderPrefixLen = folderPrefix.length
+    }
     params.folderPrefix = folderPrefix
-    params.folderPrefixLen = folderPrefix.length
   }
 
   let sql: string

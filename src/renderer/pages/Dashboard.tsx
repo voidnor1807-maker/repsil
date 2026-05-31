@@ -92,14 +92,18 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   const [renameTarget, setRenameTarget] = React.useState<{ rel: string; current: string } | null>(null)
   const [newFolderParent, setNewFolderParent] = React.useState<string | null>(null)
 
-  // Effective filters include the currently-selected folder
-  const effectiveFilters: Filters = React.useMemo(
-    () => ({
-      ...filters,
-      folderRel: selectedFolder || null
-    }),
-    [filters, selectedFolder]
-  )
+  // Effective filters layer two folder-scope sources:
+  //   - the filter panel's folder picker (recursive subtree search) — when set,
+  //     it WINS and the sidebar selection is ignored. Picking a folder here is
+  //     an explicit "narrow my search to this subtree" request.
+  //   - otherwise the sidebar selection drives an explorer-style listing of
+  //     just that folder's direct children.
+  const effectiveFilters: Filters = React.useMemo(() => {
+    if (filters.folderRel) {
+      return { ...filters, folderRecursive: filters.folderRecursive ?? true }
+    }
+    return { ...filters, folderRel: selectedFolder || null, folderRecursive: false }
+  }, [filters, selectedFolder])
 
   // Debounced search (page 0). Pagination "load more" handled separately.
   React.useEffect(() => {
@@ -407,6 +411,20 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     }
   }, [])
 
+  // Flatten the folder tree into a depth-tagged list for the filter panel's
+  // folder picker. Root ('') is skipped because "any folder" already covers
+  // it; users pick a specific subtree to narrow.
+  const availableFolders = React.useMemo(() => {
+    if (!folderTree) return []
+    const out: Array<{ rel: string; name: string; depth: number }> = []
+    const walk = (node: typeof folderTree, depth: number): void => {
+      if (node.rel_path !== '') out.push({ rel: node.rel_path, name: node.name, depth })
+      for (const c of node.children) walk(c, depth + 1)
+    }
+    walk(folderTree, 0)
+    return out
+  }, [folderTree])
+
   const availableExts = React.useMemo(() => {
     const set = new Set<string>()
     for (const r of results) {
@@ -565,6 +583,7 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
               onChange={setFilters}
               availableTags={tags}
               availableExts={availableExts}
+              availableFolders={availableFolders}
             />
             <button
               type="button"

@@ -106,6 +106,11 @@ export interface SearchFilters {
   /** When true, match documents with ANY selected tag; default ALL. */
   anyTag?: boolean
   folderRel?: string | null
+  /** When false (default) and folderRel is set, list direct children only —
+   *  this is the sidebar's explorer-style listing mode. When true, search
+   *  recursively across every file under folderRel (used by the filter
+   *  panel's folder picker so a search can be narrowed to a subtree). */
+  folderRecursive?: boolean
 }
 
 export interface SearchOptions {

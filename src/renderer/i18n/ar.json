@@ -88,7 +88,9 @@
     "fileType": "نوع الملف",
     "tags": "الوسوم",
     "matchAll": "تطابق الكل",
-    "matchAny": "تطابق أي"
+    "matchAny": "تطابق أي",
+    "folder": "المجلد",
+    "anyFolder": "أي مكان في الأرشيف"
   },
   "trash": {
     "title": "سلة المحذوفات",

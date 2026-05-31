@@ -88,7 +88,9 @@
     "fileType": "File type",
     "tags": "Tags",
     "matchAll": "Match all",
-    "matchAny": "Match any"
+    "matchAny": "Match any",
+    "folder": "Folder",
+    "anyFolder": "Anywhere in the archive"
   },
   "trash": {
     "title": "Trash",
