@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { WorkShell } from '@renderer/components/layout/WorkShell'
 import { FolderTree } from '@renderer/components/FolderTree'
+import { PromptDialog } from '@renderer/components/PromptDialog'
 import { SearchFilters } from '@renderer/components/SearchFilters'
 import { cn } from '@renderer/lib/utils'
 
@@ -86,6 +87,10 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   // clipboard — we never touch system clipboard for files.
   const [clipboard, setClipboard] = React.useState<{ mode: 'cut' | 'copy'; rel_paths: string[] } | null>(null)
   const [opNotice, setOpNotice] = React.useState<string | null>(null)
+  // Open-state for the in-app prompt dialogs (window.prompt is disabled in
+  // Electron). One slot per use site.
+  const [renameTarget, setRenameTarget] = React.useState<{ rel: string; current: string } | null>(null)
+  const [newFolderParent, setNewFolderParent] = React.useState<string | null>(null)
 
   // Effective filters include the currently-selected folder
   const effectiveFilters: Filters = React.useMemo(
@@ -265,16 +270,12 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     return [rowRel]
   }
 
-  const handleRowRename = async (rowId: number, rowRel: string, currentName: string): Promise<void> => {
+  const handleRowRename = (rowId: number, rowRel: string, currentName: string): void => {
     // Rename is always a single-file op even if multi-selected — we don't
-    // batch-rename here (Stage 2 supports one at a time).
+    // batch-rename here (Stage 2 supports one at a time). Open the modal;
+    // the actual fs.rename happens in the dialog's onConfirm.
     setSelectedIds(new Set([rowId]))
-    const next = prompt(t('document.renamePrompt'), currentName)
-    if (next == null || next === currentName || !next.trim()) return
-    const r = await window.repsil.documents.rename(rowRel, next.trim())
-    if (!r.ok) {
-      setOpNotice(t('document.renameFailed', { reason: r.error ?? '' }))
-    }
+    setRenameTarget({ rel: rowRel, current: currentName })
   }
 
   const handleRowCut = (rowId: number, rowRel: string): void => {
@@ -523,10 +524,7 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
                     await window.repsil.folderSettings.set(s)
                     await reloadTree()
                   }}
-                  onCreateFolder={async (parentRel, name) => {
-                    const r = await window.repsil.folders.create(parentRel, name)
-                    return r.ok ? null : r.error ?? 'failed'
-                  }}
+                  onRequestNewFolder={(parentRel) => setNewFolderParent(parentRel)}
                   onMoveDocument={async (srcRel, destFolderRel) => {
                     const r = await window.repsil.documents.move(srcRel, destFolderRel)
                     return r.ok ? null : r.error ?? 'failed'
@@ -784,6 +782,55 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
           {opNotice}
         </div>
       )}
+      <PromptDialog
+        open={renameTarget !== null}
+        title={t('row.rename')}
+        description={t('document.renamePrompt')}
+        initialValue={renameTarget?.current ?? ''}
+        confirmLabel={t('row.rename')}
+        validate={(v) => {
+          const trimmed = v.trim()
+          if (!trimmed) return t('validate.required')
+          if (trimmed.includes('/') || trimmed.includes('\\')) return t('validate.noSlashes')
+          if (trimmed === '.' || trimmed === '..') return t('validate.reservedName')
+          return null
+        }}
+        onCancel={() => setRenameTarget(null)}
+        onConfirm={async (next) => {
+          if (!renameTarget) return
+          if (next === renameTarget.current) {
+            setRenameTarget(null)
+            return
+          }
+          const r = await window.repsil.documents.rename(renameTarget.rel, next)
+          if (!r.ok) {
+            setOpNotice(t('document.renameFailed', { reason: r.error ?? '' }))
+          }
+          setRenameTarget(null)
+        }}
+      />
+      <PromptDialog
+        open={newFolderParent !== null}
+        title={t('folder.newFolder')}
+        description={t('folder.newPrompt')}
+        confirmLabel={t('folder.newFolder')}
+        validate={(v) => {
+          const trimmed = v.trim()
+          if (!trimmed) return t('validate.required')
+          if (trimmed.includes('/') || trimmed.includes('\\')) return t('validate.noSlashes')
+          if (trimmed === '.' || trimmed === '..') return t('validate.reservedName')
+          return null
+        }}
+        onCancel={() => setNewFolderParent(null)}
+        onConfirm={async (name) => {
+          if (newFolderParent === null) return
+          const r = await window.repsil.folders.create(newFolderParent, name)
+          if (!r.ok) {
+            setOpNotice(t('folder.createFailed', { reason: r.error ?? '' }))
+          }
+          setNewFolderParent(null)
+        }}
+      />
       {(selectedIds.size > 0 || clipboard) && (
         <div className="pointer-events-none fixed bottom-12 start-1/2 z-40 -translate-x-1/2">
           <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-border bg-bg-surface px-3 py-1.5 text-w-small text-fg shadow-soft">

@@ -11,6 +11,11 @@
     "save": "حفظ",
     "openArchive": "فتح الأرشيف"
   },
+  "validate": {
+    "required": "مطلوب.",
+    "noSlashes": "لا يُسمح بالشُرَط في اسم الملف.",
+    "reservedName": "هذا الاسم محجوز."
+  },
   "firstRun": {
     "step1": {
       "badge": "أهلاً بك",

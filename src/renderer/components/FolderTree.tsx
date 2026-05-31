@@ -11,8 +11,11 @@ interface FolderTreeProps {
   selectedRel: string | null
   onSelect: (rel: string) => void
   onSetFolderSettings: (settings: FolderSettings) => void
-  /** Create a folder. Resolves with non-null error string on failure. */
-  onCreateFolder?: (parentRel: string, name: string) => Promise<string | null>
+  /** "New folder" was chosen on the given parent rel_path. The parent is
+   *  expected to open a real (Radix) prompt dialog and create the folder via
+   *  the IPC once the user confirms. window.prompt is disabled in Electron,
+   *  which is why this is a request callback rather than a synchronous handler. */
+  onRequestNewFolder?: (parentRel: string) => void
   /** Move a document into a folder. Drop targets pass the source rel_path. */
   onMoveDocument?: (srcRelPath: string, destFolderRel: string) => Promise<string | null>
   /** True when the dashboard has something in its internal clipboard. The
@@ -28,7 +31,7 @@ export function FolderTree({
   selectedRel,
   onSelect,
   onSetFolderSettings,
-  onCreateFolder,
+  onRequestNewFolder,
   onMoveDocument,
   hasClipboard,
   onPasteInto
@@ -42,7 +45,7 @@ export function FolderTree({
         selectedRel={selectedRel}
         onSelect={onSelect}
         onSetFolderSettings={onSetFolderSettings}
-        onCreateFolder={onCreateFolder}
+        onRequestNewFolder={onRequestNewFolder}
         onMoveDocument={onMoveDocument}
         hasClipboard={hasClipboard}
         onPasteInto={onPasteInto}
@@ -59,7 +62,7 @@ interface FolderRowProps {
   selectedRel: string | null
   onSelect: (rel: string) => void
   onSetFolderSettings: (settings: FolderSettings) => void
-  onCreateFolder?: (parentRel: string, name: string) => Promise<string | null>
+  onRequestNewFolder?: (parentRel: string) => void
   onMoveDocument?: (srcRelPath: string, destFolderRel: string) => Promise<string | null>
   hasClipboard?: boolean
   onPasteInto?: (destFolderRel: string) => void | Promise<void>
@@ -73,7 +76,7 @@ function FolderRow({
   selectedRel,
   onSelect,
   onSetFolderSettings,
-  onCreateFolder,
+  onRequestNewFolder,
   onMoveDocument,
   hasClipboard,
   onPasteInto,
@@ -81,13 +84,6 @@ function FolderRow({
 }: FolderRowProps): JSX.Element {
   const { t } = useTranslation()
   const [dropOver, setDropOver] = React.useState(false)
-  const handleCreateFolder = async (): Promise<void> => {
-    if (!onCreateFolder) return
-    const name = prompt(t('folder.newPrompt'))
-    if (!name?.trim()) return
-    const err = await onCreateFolder(node.rel_path, name.trim())
-    if (err) alert(t('folder.createFailed', { reason: err }))
-  }
   const toggleOcr = (): void =>
     onSetFolderSettings({
       rel_path: node.rel_path,
@@ -202,9 +198,9 @@ function FolderRow({
                   align="end"
                   className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft"
                 >
-                  {onCreateFolder && (
+                  {onRequestNewFolder && (
                     <DropdownMenu.Item
-                      onSelect={() => void handleCreateFolder()}
+                      onSelect={() => onRequestNewFolder(node.rel_path)}
                       className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
                     >
                       <FolderPlus className="h-3.5 w-3.5 text-fg-muted" />
@@ -249,9 +245,9 @@ function FolderRow({
                 <ContextMenu.Separator className="my-1 h-px bg-border" />
               </>
             )}
-            {onCreateFolder && (
+            {onRequestNewFolder && (
               <ContextMenu.Item
-                onSelect={() => void handleCreateFolder()}
+                onSelect={() => onRequestNewFolder(node.rel_path)}
                 className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
               >
                 <FolderPlus className="h-3.5 w-3.5 text-fg-muted" />
@@ -289,7 +285,7 @@ function FolderRow({
               selectedRel={selectedRel}
               onSelect={onSelect}
               onSetFolderSettings={onSetFolderSettings}
-              onCreateFolder={onCreateFolder}
+              onRequestNewFolder={onRequestNewFolder}
               onMoveDocument={onMoveDocument}
               hasClipboard={hasClipboard}
               onPasteInto={onPasteInto}

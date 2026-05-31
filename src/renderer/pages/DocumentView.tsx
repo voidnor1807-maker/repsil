@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { DirectionalIcon } from '@renderer/components/layout/DirectionalIcon'
+import { PromptDialog } from '@renderer/components/PromptDialog'
 import { TagInput } from '@renderer/components/TagInput'
 import { cn } from '@renderer/lib/utils'
 import { PREVIEW_IMAGE_EXTS, PREVIEW_TEXT_EXTS } from '@shared/extensions'
@@ -69,6 +70,8 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
   // Raw text/markdown preview, fetched from the repsil-file:// scheme.
   const [textPreview, setTextPreview] = React.useState<string | null>(null)
   const [textTruncated, setTextTruncated] = React.useState(false)
+  const [renameOpen, setRenameOpen] = React.useState(false)
+  const [renameError, setRenameError] = React.useState<string | null>(null)
   // Cleared on unmount so background poll loops stop touching state (IN-03).
   const aliveRef = React.useRef(true)
   React.useEffect(() => {
@@ -243,24 +246,7 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
         <Button
           variant="ghost"
           size="sm"
-          onClick={async () => {
-            const next = prompt(t('document.renamePrompt'), doc.filename)
-            if (next == null || next === doc.filename || !next.trim()) return
-            const result = await window.repsil.documents.rename(doc.rel_path, next.trim())
-            if (!result.ok) {
-              alert(t('document.renameFailed', { reason: result.error ?? '' }))
-              return
-            }
-            if (result.newRelPath) {
-              const fresh = await window.repsil.documents.get(id)
-              if (fresh) {
-                setDoc(fresh)
-                const f = toForm(fresh)
-                setForm(f)
-                setOriginal(f)
-              }
-            }
-          }}
+          onClick={() => setRenameOpen(true)}
           className="gap-1.5"
           title={t('document.rename')}
         >
@@ -445,6 +431,53 @@ export function DocumentView({ id, onBack }: DocumentViewProps): JSX.Element {
           </section>
         </aside>
       </div>
+
+      <PromptDialog
+        open={renameOpen}
+        title={t('document.rename')}
+        description={t('document.renamePrompt')}
+        initialValue={doc.filename}
+        confirmLabel={t('document.rename')}
+        validate={(v) => {
+          const trimmed = v.trim()
+          if (!trimmed) return t('validate.required')
+          if (trimmed.includes('/') || trimmed.includes('\\')) return t('validate.noSlashes')
+          if (trimmed === '.' || trimmed === '..') return t('validate.reservedName')
+          return null
+        }}
+        onCancel={() => {
+          setRenameOpen(false)
+          setRenameError(null)
+        }}
+        onConfirm={async (next) => {
+          if (next === doc.filename) {
+            setRenameOpen(false)
+            return
+          }
+          const result = await window.repsil.documents.rename(doc.rel_path, next)
+          if (!result.ok) {
+            setRenameError(result.error ?? 'failed')
+            alert(t('document.renameFailed', { reason: result.error ?? '' }))
+            return
+          }
+          // Pull the fresh row so the header + sidebar fields reflect the new
+          // name immediately.
+          const fresh = await window.repsil.documents.get(id)
+          if (fresh) {
+            setDoc(fresh)
+            const f = toForm(fresh)
+            setForm(f)
+            setOriginal(f)
+          }
+          setRenameOpen(false)
+          setRenameError(null)
+        }}
+      />
+      {renameError && (
+        <div className="fixed bottom-6 start-1/2 z-50 -translate-x-1/2 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-2 text-w-small text-destructive shadow-lg">
+          {t('document.renameFailed', { reason: renameError })}
+        </div>
+      )}
     </div>
   )
 }

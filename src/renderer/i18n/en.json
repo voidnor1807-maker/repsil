@@ -11,6 +11,11 @@
     "save": "Save",
     "openArchive": "Open archive"
   },
+  "validate": {
+    "required": "Required.",
+    "noSlashes": "Slashes aren't allowed in a filename.",
+    "reservedName": "That name is reserved."
+  },
   "firstRun": {
     "step1": {
       "badge": "Welcome",
