@@ -1,6 +1,22 @@
 import * as React from 'react'
+import * as ContextMenu from '@radix-ui/react-context-menu'
 import { useTranslation } from 'react-i18next'
-import { Search, FileText, Loader2, RefreshCw, Settings, Tag as TagIcon, Trash2, AlertCircle, Wifi } from 'lucide-react'
+import {
+  Search,
+  FileText,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  Scissors,
+  Copy as CopyIcon,
+  Settings,
+  Tag as TagIcon,
+  Trash2,
+  AlertCircle,
+  ExternalLink,
+  FolderOpen,
+  Wifi
+} from 'lucide-react'
 import { WorkShell } from '@renderer/components/layout/WorkShell'
 import { FolderTree } from '@renderer/components/FolderTree'
 import { SearchFilters } from '@renderer/components/SearchFilters'
@@ -199,22 +215,26 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     }
   }
 
-  const runPaste = async (): Promise<void> => {
+  const runPaste = async (destOverride?: string): Promise<void> => {
     if (!clipboard || clipboard.rel_paths.length === 0) return
-    const dest = selectedFolder // '' = archive root
+    const dest = destOverride ?? selectedFolder // '' = archive root
     const action = clipboard.mode === 'cut' ? window.repsil.documents.move : window.repsil.documents.copy
     let ok = 0
     let failed = 0
+    let firstError: string | null = null
     for (const rel of clipboard.rel_paths) {
       const r = await action(rel, dest)
       if (r.ok) ok++
-      else failed++
+      else {
+        failed++
+        if (!firstError && r.error) firstError = r.error
+      }
     }
-    setOpNotice(
+    const base =
       clipboard.mode === 'cut'
         ? t('dashboard.pasteMoved', { count: ok, failed })
         : t('dashboard.pasteCopied', { count: ok, failed })
-    )
+    setOpNotice(firstError && failed > 0 ? `${base} — ${firstError}` : base)
     if (clipboard.mode === 'cut') setClipboard(null)
   }
 
@@ -224,6 +244,55 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     let ok = 0
     let failed = 0
     for (const rel of selectedRelPaths) {
+      const okOne = await window.repsil.documents.delete(rel)
+      if (okOne) ok++
+      else failed++
+    }
+    setOpNotice(t('dashboard.deletedCount', { count: ok, failed }))
+    setSelectedIds(new Set())
+  }
+
+  /**
+   * Right-click on a row resolves to "act on the multi-selection if this row is
+   * part of it; otherwise replace the selection with just this row, then act".
+   * Returns the list of rel_paths the action should run over.
+   */
+  const resolveContextTargets = (rowId: number, rowRel: string): string[] => {
+    if (selectedIds.has(rowId) && selectedIds.size > 1) return selectedRelPaths
+    // Right-clicking outside the selection: replace selection with this row so
+    // the visual highlight matches what the action will hit.
+    setSelectedIds(new Set([rowId]))
+    return [rowRel]
+  }
+
+  const handleRowRename = async (rowId: number, rowRel: string, currentName: string): Promise<void> => {
+    // Rename is always a single-file op even if multi-selected — we don't
+    // batch-rename here (Stage 2 supports one at a time).
+    setSelectedIds(new Set([rowId]))
+    const next = prompt(t('document.renamePrompt'), currentName)
+    if (next == null || next === currentName || !next.trim()) return
+    const r = await window.repsil.documents.rename(rowRel, next.trim())
+    if (!r.ok) {
+      setOpNotice(t('document.renameFailed', { reason: r.error ?? '' }))
+    }
+  }
+
+  const handleRowCut = (rowId: number, rowRel: string): void => {
+    const targets = resolveContextTargets(rowId, rowRel)
+    setClipboard({ mode: 'cut', rel_paths: targets })
+    setOpNotice(t('dashboard.cutN', { count: targets.length }))
+  }
+  const handleRowCopy = (rowId: number, rowRel: string): void => {
+    const targets = resolveContextTargets(rowId, rowRel)
+    setClipboard({ mode: 'copy', rel_paths: targets })
+    setOpNotice(t('dashboard.copiedN', { count: targets.length }))
+  }
+  const handleRowDelete = async (rowId: number, rowRel: string): Promise<void> => {
+    const targets = resolveContextTargets(rowId, rowRel)
+    if (!confirm(t('dashboard.deleteSelectedConfirm', { count: targets.length }))) return
+    let ok = 0
+    let failed = 0
+    for (const rel of targets) {
       const okOne = await window.repsil.documents.delete(rel)
       if (okOne) ok++
       else failed++
@@ -374,19 +443,41 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     dragDepthRef.current = 0
     setDropActive(false)
     const files = Array.from(e.dataTransfer.files)
-    if (files.length === 0) return
+    if (files.length === 0) {
+      setImportNotice(t('dashboard.importEmpty'))
+      return
+    }
     // Electron 32+ removed File.path; the preload bridge does the lookup via
     // webUtils.getPathForFile. Blobs without a real fs path resolve to '' and
     // are filtered out here.
     const paths = files.map((f) => window.repsil.documents.resolveDroppedPath(f)).filter(Boolean)
-    if (paths.length === 0) return
+    if (paths.length === 0) {
+      // The drop registered file-like objects but none had a real filesystem
+      // path (could be a browser blob, a clipboard image, or a sandboxed
+      // Explorer drop on a network share). Tell the user instead of silently
+      // dropping the event.
+      setImportNotice(t('dashboard.importNoPath', { count: files.length }))
+      return
+    }
     try {
       const r = await window.repsil.documents.import(paths, selectedFolder)
       const where = selectedFolder ? `/${selectedFolder}` : '/'
       const parts: string[] = []
       if (r.imported.length > 0) parts.push(t('dashboard.importedCount', { count: r.imported.length, dest: where }))
-      if (r.skipped.length > 0) parts.push(t('dashboard.skippedCount', { count: r.skipped.length }))
-      if (parts.length > 0) setImportNotice(parts.join(' · '))
+      if (r.skipped.length > 0) {
+        // Surface the first skip reason inline — most batches share a single
+        // root cause (perms, oversize, traversal). Massively easier to debug
+        // than a bare "N skipped".
+        const firstReason = r.skipped[0]?.reason ?? ''
+        parts.push(t('dashboard.skippedCount', { count: r.skipped.length }) + (firstReason ? ` (${firstReason})` : ''))
+      }
+      if (parts.length === 0) {
+        // Nothing imported, nothing skipped — likely the drop produced no
+        // resolvable file paths at all. Tell the user something happened.
+        setImportNotice(t('dashboard.importEmpty'))
+      } else {
+        setImportNotice(parts.join(' · '))
+      }
     } catch (err) {
       console.error('import failed:', err)
       setImportNotice(t('dashboard.importFailed'))
@@ -440,6 +531,8 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
                     const r = await window.repsil.documents.move(srcRel, destFolderRel)
                     return r.ok ? null : r.error ?? 'failed'
                   }}
+                  hasClipboard={!!clipboard && clipboard.rel_paths.length > 0}
+                  onPasteInto={(destFolderRel) => void runPaste(destFolderRel)}
                 />
               )}
             </div>
@@ -550,21 +643,82 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
                   const cutMarked =
                     clipboard?.mode === 'cut' && clipboard.rel_paths.includes(r.rel_path)
                   return (
-                    <ResultRow
-                      key={r.id}
-                      hit={r}
-                      tags={tagsByDoc[r.id] ?? []}
-                      selected={selectedIds.has(r.id)}
-                      cutMarked={cutMarked}
-                      onClickSelect={(e) => handleRowClick(e, r.id, idx)}
-                      onOpen={() => {
-                        // Click-without-modifier opens the doc but ALSO sets
-                        // the anchor so a subsequent shift-click extends from
-                        // here.
-                        anchorIdRef.current = r.id
-                        setSelectedId(r.id)
-                      }}
-                    />
+                    <ContextMenu.Root key={r.id}>
+                      <ContextMenu.Trigger asChild>
+                        <ResultRow
+                          hit={r}
+                          tags={tagsByDoc[r.id] ?? []}
+                          selected={selectedIds.has(r.id)}
+                          cutMarked={cutMarked}
+                          onClickSelect={(e) => handleRowClick(e, r.id, idx)}
+                          onOpen={() => {
+                            anchorIdRef.current = r.id
+                            setSelectedId(r.id)
+                          }}
+                        />
+                      </ContextMenu.Trigger>
+                      <ContextMenu.Portal>
+                        <ContextMenu.Content className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft">
+                          <ContextMenu.Item
+                            onSelect={() => {
+                              anchorIdRef.current = r.id
+                              setSelectedId(r.id)
+                            }}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                          >
+                            <FileText className="h-3.5 w-3.5 text-fg-muted" />
+                            {t('row.open')}
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            onSelect={() => void handleRowRename(r.id, r.rel_path, r.filename)}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-fg-muted" />
+                            {t('row.rename')}
+                          </ContextMenu.Item>
+                          <ContextMenu.Separator className="my-1 h-px bg-border" />
+                          <ContextMenu.Item
+                            onSelect={() => handleRowCut(r.id, r.rel_path)}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                          >
+                            <Scissors className="h-3.5 w-3.5 text-fg-muted" />
+                            {t('row.cut')}
+                            <span className="ms-auto text-w-small text-fg-muted">Ctrl+X</span>
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            onSelect={() => handleRowCopy(r.id, r.rel_path)}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                          >
+                            <CopyIcon className="h-3.5 w-3.5 text-fg-muted" />
+                            {t('row.copy')}
+                            <span className="ms-auto text-w-small text-fg-muted">Ctrl+C</span>
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            onSelect={() => void handleRowDelete(r.id, r.rel_path)}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-destructive outline-none data-[highlighted]:bg-destructive/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {t('row.delete')}
+                            <span className="ms-auto text-w-small text-fg-muted">Del</span>
+                          </ContextMenu.Item>
+                          <ContextMenu.Separator className="my-1 h-px bg-border" />
+                          <ContextMenu.Item
+                            onSelect={() => void window.repsil.documents.openExternal(r.rel_path)}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 text-fg-muted" />
+                            {t('document.openExternal')}
+                          </ContextMenu.Item>
+                          <ContextMenu.Item
+                            onSelect={() => void window.repsil.documents.revealInFolder(r.rel_path)}
+                            className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                          >
+                            <FolderOpen className="h-3.5 w-3.5 text-fg-muted" />
+                            {t('document.revealInFolder')}
+                          </ContextMenu.Item>
+                        </ContextMenu.Content>
+                      </ContextMenu.Portal>
+                    </ContextMenu.Root>
                   )
                 })}
               </ul>
@@ -677,24 +831,24 @@ function SyncIndicator({ status }: { status: SyncStatus | null }): JSX.Element {
   )
 }
 
-function ResultRow({
-  hit,
-  tags,
-  onOpen,
-  onClickSelect,
-  selected = false,
-  cutMarked = false
-}: {
+interface ResultRowProps {
   hit: SearchResult
   tags: string[]
   onOpen: () => void
   onClickSelect?: (e: React.MouseEvent) => void
   selected?: boolean
   cutMarked?: boolean
-}): JSX.Element {
+}
+
+const ResultRow = React.forwardRef<HTMLLIElement, ResultRowProps>(function ResultRow(
+  { hit, tags, onOpen, onClickSelect, selected = false, cutMarked = false, ...rest },
+  ref
+): JSX.Element {
   const { t } = useTranslation()
   return (
     <li
+      ref={ref}
+      {...rest}
       draggable
       onDragStart={(e) => {
         // Custom MIME type so FolderTree can distinguish a row drag from a
@@ -754,7 +908,7 @@ function ResultRow({
       </button>
     </li>
   )
-}
+})
 
 function QueueIndicator({ status }: { status: ExtractionQueueStatus | null }): JSX.Element {
   const { t } = useTranslation()

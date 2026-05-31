@@ -63,7 +63,17 @@
     "deletedCount_one": "Deleted 1 item ({{failed}} failed)",
     "deletedCount_other": "Deleted {{count}} items ({{failed}} failed)",
     "deleteSelectedConfirm_one": "Move 1 item to the trash?",
-    "deleteSelectedConfirm_other": "Move {{count}} items to the trash?"
+    "deleteSelectedConfirm_other": "Move {{count}} items to the trash?",
+    "importEmpty": "Nothing was dropped — the drop produced no files.",
+    "importNoPath_one": "Couldn't read the file path. (Files dragged from inside another sandboxed app may not expose a path.)",
+    "importNoPath_other": "Couldn't read any of the {{count}} file paths. (Files dragged from inside another sandboxed app may not expose a path.)"
+  },
+  "row": {
+    "open": "Open",
+    "rename": "Rename…",
+    "cut": "Cut",
+    "copy": "Copy",
+    "delete": "Move to trash"
   },
   "filters": {
     "button": "Filters",
@@ -133,7 +143,8 @@
     "newFolder": "New folder…",
     "newPrompt": "Folder name",
     "createFailed": "Could not create folder: {{reason}}",
-    "moveFailed": "Could not move: {{reason}}"
+    "moveFailed": "Could not move: {{reason}}",
+    "pasteHere": "Paste here"
   },
   "sync": {
     "title": "Sync over LAN",

@@ -63,7 +63,17 @@
     "deletedCount_one": "تم حذف عنصر واحد ({{failed}} فشل)",
     "deletedCount_other": "تم حذف {{count}} عناصر ({{failed}} فشل)",
     "deleteSelectedConfirm_one": "نقل عنصر واحد إلى السلة؟",
-    "deleteSelectedConfirm_other": "نقل {{count}} عناصر إلى السلة؟"
+    "deleteSelectedConfirm_other": "نقل {{count}} عناصر إلى السلة؟",
+    "importEmpty": "لم يتم إفلات أي ملف.",
+    "importNoPath_one": "تعذر قراءة مسار الملف. (الملفات المسحوبة من تطبيقات معزولة قد لا تكشف مسارها.)",
+    "importNoPath_other": "تعذر قراءة مسارات {{count}} ملفات. (الملفات المسحوبة من تطبيقات معزولة قد لا تكشف مسارها.)"
+  },
+  "row": {
+    "open": "فتح",
+    "rename": "إعادة تسمية…",
+    "cut": "قص",
+    "copy": "نسخ",
+    "delete": "نقل إلى السلة"
   },
   "filters": {
     "button": "تصفية",
@@ -133,7 +143,8 @@
     "newFolder": "مجلد جديد…",
     "newPrompt": "اسم المجلد",
     "createFailed": "تعذر إنشاء المجلد: {{reason}}",
-    "moveFailed": "تعذر النقل: {{reason}}"
+    "moveFailed": "تعذر النقل: {{reason}}",
+    "pasteHere": "ألصق هنا"
   },
   "sync": {
     "title": "المزامنة عبر الشبكة المحلية",

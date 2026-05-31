@@ -15,6 +15,12 @@ interface FolderTreeProps {
   onCreateFolder?: (parentRel: string, name: string) => Promise<string | null>
   /** Move a document into a folder. Drop targets pass the source rel_path. */
   onMoveDocument?: (srcRelPath: string, destFolderRel: string) => Promise<string | null>
+  /** True when the dashboard has something in its internal clipboard. The
+   *  context menu surfaces a "Paste here" item only when this is set. */
+  hasClipboard?: boolean
+  /** Triggered by "Paste here" on a folder row. Dashboard owns the clipboard
+   *  + handles cut/copy semantics. */
+  onPasteInto?: (destFolderRel: string) => void | Promise<void>
 }
 
 export function FolderTree({
@@ -23,7 +29,9 @@ export function FolderTree({
   onSelect,
   onSetFolderSettings,
   onCreateFolder,
-  onMoveDocument
+  onMoveDocument,
+  hasClipboard,
+  onPasteInto
 }: FolderTreeProps): JSX.Element {
   return (
     <div className="select-none overflow-auto py-2 text-w-small">
@@ -36,6 +44,8 @@ export function FolderTree({
         onSetFolderSettings={onSetFolderSettings}
         onCreateFolder={onCreateFolder}
         onMoveDocument={onMoveDocument}
+        hasClipboard={hasClipboard}
+        onPasteInto={onPasteInto}
         defaultOpen
       />
     </div>
@@ -51,6 +61,8 @@ interface FolderRowProps {
   onSetFolderSettings: (settings: FolderSettings) => void
   onCreateFolder?: (parentRel: string, name: string) => Promise<string | null>
   onMoveDocument?: (srcRelPath: string, destFolderRel: string) => Promise<string | null>
+  hasClipboard?: boolean
+  onPasteInto?: (destFolderRel: string) => void | Promise<void>
   defaultOpen?: boolean
 }
 
@@ -63,6 +75,8 @@ function FolderRow({
   onSetFolderSettings,
   onCreateFolder,
   onMoveDocument,
+  hasClipboard,
+  onPasteInto,
   defaultOpen
 }: FolderRowProps): JSX.Element {
   const { t } = useTranslation()
@@ -222,6 +236,19 @@ function FolderRow({
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className="z-50 min-w-[14rem] overflow-hidden rounded-md border border-border bg-bg-surface p-1 text-w-small shadow-soft">
+            {hasClipboard && onPasteInto && (
+              <>
+                <ContextMenu.Item
+                  onSelect={() => void onPasteInto(node.rel_path)}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-fg outline-none data-[highlighted]:bg-bg-elevated"
+                >
+                  <FolderPlus className="h-3.5 w-3.5 text-fg-muted" />
+                  {t('folder.pasteHere')}
+                  <span className="ms-auto text-w-small text-fg-muted">Ctrl+V</span>
+                </ContextMenu.Item>
+                <ContextMenu.Separator className="my-1 h-px bg-border" />
+              </>
+            )}
             {onCreateFolder && (
               <ContextMenu.Item
                 onSelect={() => void handleCreateFolder()}
@@ -264,6 +291,8 @@ function FolderRow({
               onSetFolderSettings={onSetFolderSettings}
               onCreateFolder={onCreateFolder}
               onMoveDocument={onMoveDocument}
+              hasClipboard={hasClipboard}
+              onPasteInto={onPasteInto}
             />
           ))}
         </div>
