@@ -37,14 +37,49 @@ export interface ImportResult {
   skipped: Array<{ source: string; reason: string }>
 }
 
+interface WorkItem {
+  srcAbs: string
+  /** Path inside the destination folder, with forward slashes. The basename of
+   *  this is what we run through the per-folder collision suffix logic; the
+   *  rest of the segments are created with `mkdir -p` semantics. */
+  destSubPath: string
+  size: number
+}
+
+/** Recursively collect every regular file inside `dir`. Returns absolute paths
+ *  paired with the path inside `dir` (forward-slashed). Symlinks are ignored
+ *  to avoid loops and accidental archive-escape via a symlinked folder drop. */
+async function walkDirectory(
+  dir: string,
+  baseRelInDir: string
+): Promise<Array<{ abs: string; relInDir: string }>> {
+  const out: Array<{ abs: string; relInDir: string }> = []
+  const entries = await fs.readdir(dir, { withFileTypes: true })
+  for (const e of entries) {
+    const full = join(dir, e.name)
+    const childRel = baseRelInDir ? `${baseRelInDir}/${e.name}` : e.name
+    if (e.isSymbolicLink()) continue
+    if (e.isDirectory()) {
+      const nested = await walkDirectory(full, childRel)
+      out.push(...nested)
+    } else if (e.isFile()) {
+      out.push({ abs: full, relInDir: childRel })
+    }
+  }
+  return out
+}
+
 /**
  * Copy a list of external absolute paths into the archive under destFolderRel.
  * Returns the relative paths of imported files plus a per-file skip reason for
  * anything that failed. Filename collisions auto-rename to `name (1).ext`,
  * `name (2).ext`, ... so a drop never silently overwrites an existing file.
  *
- * Directories and oversize files are skipped. The watcher picks the new files
- * up as `add` events and the existing extraction/sync pipelines take over.
+ * Directories are walked recursively: their tree is mirrored under
+ * `destFolderRel/<directoryName>/...`. Per-file collisions inside the mirrored
+ * tree get the same `(1)`, `(2)` suffix. Oversize files (per-file cap) are
+ * skipped individually. The watcher picks new files up as `add` events and
+ * the existing extraction/sync pipelines take over.
  */
 export async function importExternalFiles(
   repsil: RepsilDb,
@@ -70,31 +105,74 @@ export async function importExternalFiles(
     return result
   }
 
+  // First pass: expand directories into a flat list of work items. This lets
+  // a single error inside a giant tree skip just that file and keep going.
+  const items: WorkItem[] = []
   for (const source of sources) {
     try {
       const st = await fs.stat(source)
       if (st.isDirectory()) {
-        result.skipped.push({ source, reason: 'directories not supported yet' })
-        continue
-      }
-      if (!st.isFile()) {
+        const topName = basename(source)
+        const walked = await walkDirectory(source, '')
+        if (walked.length === 0) {
+          // Nothing to import from the dropped folder. Surface it so the user
+          // isn't left wondering whether the drop registered.
+          result.skipped.push({ source, reason: 'folder is empty' })
+          continue
+        }
+        for (const w of walked) {
+          try {
+            const sub = await fs.stat(w.abs)
+            items.push({
+              srcAbs: w.abs,
+              destSubPath: `${topName}/${w.relInDir}`,
+              size: sub.size
+            })
+          } catch (err) {
+            result.skipped.push({ source: w.abs, reason: (err as Error).message })
+          }
+        }
+      } else if (st.isFile()) {
+        items.push({ srcAbs: source, destSubPath: basename(source), size: st.size })
+      } else {
         result.skipped.push({ source, reason: 'not a regular file' })
-        continue
       }
-      if (st.size > maxBytes) {
-        result.skipped.push({ source, reason: `file exceeds ${Math.round(maxBytes / 1024 / 1024)} MB cap` })
-        continue
-      }
-      const original = basename(source)
-      const targetName = await chooseTargetName(destDirAbs, original)
-      const targetAbs = join(destDirAbs, targetName)
-      // copyFile + COPYFILE_EXCL means we still fail rather than overwrite if
-      // another process raced us between chooseTargetName and now.
-      await fs.copyFile(source, targetAbs, fs.constants.COPYFILE_EXCL)
-      const relPath = folder ? `${folder}/${targetName}` : targetName
-      result.imported.push(relPath)
     } catch (err) {
       result.skipped.push({ source, reason: (err as Error).message })
+    }
+  }
+
+  for (const item of items) {
+    if (item.size > maxBytes) {
+      result.skipped.push({
+        source: item.srcAbs,
+        reason: `file exceeds ${Math.round(maxBytes / 1024 / 1024)} MB cap`
+      })
+      continue
+    }
+    try {
+      // Build the final target relative to the archive root and resolve it
+      // back through the safety check so a maliciously crafted directory name
+      // (e.g. one containing '..') can never escape the archive.
+      const finalRel = folder ? `${folder}/${item.destSubPath}` : item.destSubPath
+      const parentRel = dirname(finalRel).replace(/\\/g, '/')
+      const targetParentAbs =
+        parentRel === '.' ? repsil.rootPath : resolveInsideArchive(repsil.rootPath, parentRel)
+      if (!targetParentAbs) {
+        result.skipped.push({ source: item.srcAbs, reason: 'invalid destination' })
+        continue
+      }
+      await fs.mkdir(targetParentAbs, { recursive: true })
+      const original = basename(finalRel)
+      const targetName = await chooseTargetName(targetParentAbs, original)
+      const targetAbs = join(targetParentAbs, targetName)
+      // copyFile + COPYFILE_EXCL means we still fail rather than overwrite if
+      // another process raced us between chooseTargetName and now.
+      await fs.copyFile(item.srcAbs, targetAbs, fs.constants.COPYFILE_EXCL)
+      const importedRel = parentRel === '.' ? targetName : `${parentRel}/${targetName}`
+      result.imported.push(importedRel)
+    } catch (err) {
+      result.skipped.push({ source: item.srcAbs, reason: (err as Error).message })
     }
   }
   return result

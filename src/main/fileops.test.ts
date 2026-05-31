@@ -74,26 +74,57 @@ describe('importExternalFiles', () => {
     expect(r.skipped[0].reason).toMatch(/invalid destination/i)
   })
 
-  test('skips directories and oversize files but processes the rest', async () => {
+  test('skips oversize files but processes the rest', async () => {
     await fs.mkdir(archiveRoot)
     await fs.mkdir(outside)
-    await fs.mkdir(join(outside, 'a-dir'))
     await fs.writeFile(join(outside, 'big.bin'), Buffer.alloc(2048))
     await fs.writeFile(join(outside, 'ok.txt'), 'fine')
 
     const r = await importExternalFiles(
       stubRepsil(archiveRoot),
-      [join(outside, 'a-dir'), join(outside, 'big.bin'), join(outside, 'ok.txt')],
+      [join(outside, 'big.bin'), join(outside, 'ok.txt')],
       '',
       { maxBytes: 1024 }
     )
 
     expect(r.imported).toEqual(['ok.txt'])
     expect(r.skipped.map((s) => s.reason)).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/directories/i),
-        expect.stringMatching(/cap/i)
-      ])
+      expect.arrayContaining([expect.stringMatching(/cap/i)])
     )
+  })
+
+  test('imports a dropped folder recursively, preserving its tree', async () => {
+    await fs.mkdir(archiveRoot)
+    await fs.mkdir(outside)
+    const src = join(outside, 'New folder (2)')
+    await fs.mkdir(src)
+    await fs.mkdir(join(src, 'nested'))
+    await fs.writeFile(join(src, 'a.txt'), 'A')
+    await fs.writeFile(join(src, 'nested', 'b.txt'), 'B')
+
+    const r = await importExternalFiles(stubRepsil(archiveRoot), [src], '')
+
+    expect(r.skipped).toEqual([])
+    expect(r.imported.sort()).toEqual([
+      'New folder (2)/a.txt',
+      'New folder (2)/nested/b.txt'
+    ])
+    expect(await fs.readFile(join(archiveRoot, 'New folder (2)', 'a.txt'), 'utf-8')).toBe('A')
+    expect(
+      await fs.readFile(join(archiveRoot, 'New folder (2)', 'nested', 'b.txt'), 'utf-8')
+    ).toBe('B')
+  })
+
+  test('reports an empty folder drop instead of silently doing nothing', async () => {
+    await fs.mkdir(archiveRoot)
+    await fs.mkdir(outside)
+    const src = join(outside, 'empty')
+    await fs.mkdir(src)
+
+    const r = await importExternalFiles(stubRepsil(archiveRoot), [src], '')
+
+    expect(r.imported).toEqual([])
+    expect(r.skipped).toHaveLength(1)
+    expect(r.skipped[0].reason).toMatch(/empty/i)
   })
 })
