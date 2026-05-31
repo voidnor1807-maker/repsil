@@ -63,6 +63,13 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
   // Tracks nested dragenter/dragleave so we keep the overlay visible while the
   // pointer crosses over a child element — only the outermost leave clears it.
   const dragDepthRef = React.useRef(0)
+  // Multi-select state by document id. Anchor is used for shift-range selects.
+  const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set())
+  const anchorIdRef = React.useRef<number | null>(null)
+  // Internal clipboard (cut/copy of rel_paths). Separate from the OS
+  // clipboard — we never touch system clipboard for files.
+  const [clipboard, setClipboard] = React.useState<{ mode: 'cut' | 'copy'; rel_paths: string[] } | null>(null)
+  const [opNotice, setOpNotice] = React.useState<string | null>(null)
 
   // Effective filters include the currently-selected folder
   const effectiveFilters: Filters = React.useMemo(
@@ -141,6 +148,144 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
     const timer = setTimeout(() => setImportNotice(null), 4000)
     return () => clearTimeout(timer)
   }, [importNotice])
+  React.useEffect(() => {
+    if (!opNotice) return
+    const timer = setTimeout(() => setOpNotice(null), 3000)
+    return () => clearTimeout(timer)
+  }, [opNotice])
+
+  // Reset the selection whenever the underlying result set changes — the
+  // ids the user picked may no longer be in the list.
+  React.useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev
+      const visible = new Set(results.map((r) => r.id))
+      const next = new Set<number>()
+      for (const id of prev) if (visible.has(id)) next.add(id)
+      return next.size === prev.size ? prev : next
+    })
+  }, [results])
+
+  // Helper: rel_paths of the currently selected (in-order with results).
+  const selectedRelPaths = React.useMemo(() => {
+    if (selectedIds.size === 0) return []
+    return results.filter((r) => selectedIds.has(r.id)).map((r) => r.rel_path)
+  }, [results, selectedIds])
+
+  const handleRowClick = (e: React.MouseEvent, id: number, index: number): void => {
+    // Plain click in an active selection adjusts the selection; otherwise the
+    // ResultRow's onOpen still navigates (handled by its own onClick).
+    if (e.shiftKey && anchorIdRef.current !== null) {
+      const anchorIndex = results.findIndex((r) => r.id === anchorIdRef.current)
+      if (anchorIndex < 0) return
+      const lo = Math.min(anchorIndex, index)
+      const hi = Math.max(anchorIndex, index)
+      const next = new Set<number>()
+      for (let i = lo; i <= hi; i++) next.add(results[i].id)
+      setSelectedIds(next)
+      e.preventDefault()
+      return
+    }
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+      })
+      anchorIdRef.current = id
+      e.preventDefault()
+      return
+    }
+  }
+
+  const runPaste = async (): Promise<void> => {
+    if (!clipboard || clipboard.rel_paths.length === 0) return
+    const dest = selectedFolder // '' = archive root
+    const action = clipboard.mode === 'cut' ? window.repsil.documents.move : window.repsil.documents.copy
+    let ok = 0
+    let failed = 0
+    for (const rel of clipboard.rel_paths) {
+      const r = await action(rel, dest)
+      if (r.ok) ok++
+      else failed++
+    }
+    setOpNotice(
+      clipboard.mode === 'cut'
+        ? t('dashboard.pasteMoved', { count: ok, failed })
+        : t('dashboard.pasteCopied', { count: ok, failed })
+    )
+    if (clipboard.mode === 'cut') setClipboard(null)
+  }
+
+  const runBulkDelete = async (): Promise<void> => {
+    if (selectedRelPaths.length === 0) return
+    if (!confirm(t('dashboard.deleteSelectedConfirm', { count: selectedRelPaths.length }))) return
+    let ok = 0
+    let failed = 0
+    for (const rel of selectedRelPaths) {
+      const okOne = await window.repsil.documents.delete(rel)
+      if (okOne) ok++
+      else failed++
+    }
+    setOpNotice(t('dashboard.deletedCount', { count: ok, failed }))
+    setSelectedIds(new Set())
+  }
+
+  // Keyboard shortcuts. Skipped when the user is typing in an input/textarea
+  // so the search box and metadata edits stay unimpaired.
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      const inEditable =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        target?.isContentEditable === true
+      if (inEditable) return
+      // No-op when a dialog or sub-view owns the screen.
+      if (settingsOpen || syncOpen || trashOpen || selectedId !== null) return
+
+      const ctrl = e.ctrlKey || e.metaKey
+      if (e.key === 'Escape') {
+        setSelectedIds(new Set())
+        return
+      }
+      if (ctrl && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault()
+        setSelectedIds(new Set(results.map((r) => r.id)))
+        return
+      }
+      if (selectedRelPaths.length === 0 && !(ctrl && (e.key === 'v' || e.key === 'V'))) return
+
+      if (ctrl && (e.key === 'x' || e.key === 'X')) {
+        e.preventDefault()
+        setClipboard({ mode: 'cut', rel_paths: selectedRelPaths })
+        setOpNotice(t('dashboard.cutN', { count: selectedRelPaths.length }))
+        return
+      }
+      if (ctrl && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault()
+        setClipboard({ mode: 'copy', rel_paths: selectedRelPaths })
+        setOpNotice(t('dashboard.copiedN', { count: selectedRelPaths.length }))
+        return
+      }
+      if (ctrl && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault()
+        void runPaste()
+        return
+      }
+      if (e.key === 'Delete') {
+        e.preventDefault()
+        void runBulkDelete()
+        return
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results, selectedRelPaths, selectedFolder, clipboard, settingsOpen, syncOpen, trashOpen, selectedId])
 
   // Live document changes pushed by the main process (watcher add/remove/
   // change, plus metadata edits and sync apply). Bump refreshKey to re-run the
@@ -401,14 +546,27 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
           {results.length > 0 && (
             <>
               <ul className="divide-y divide-border rounded-lg border border-border bg-bg-elevated/30">
-                {results.map((r) => (
-                  <ResultRow
-                    key={r.id}
-                    hit={r}
-                    tags={tagsByDoc[r.id] ?? []}
-                    onOpen={() => setSelectedId(r.id)}
-                  />
-                ))}
+                {results.map((r, idx) => {
+                  const cutMarked =
+                    clipboard?.mode === 'cut' && clipboard.rel_paths.includes(r.rel_path)
+                  return (
+                    <ResultRow
+                      key={r.id}
+                      hit={r}
+                      tags={tagsByDoc[r.id] ?? []}
+                      selected={selectedIds.has(r.id)}
+                      cutMarked={cutMarked}
+                      onClickSelect={(e) => handleRowClick(e, r.id, idx)}
+                      onOpen={() => {
+                        // Click-without-modifier opens the doc but ALSO sets
+                        // the anchor so a subsequent shift-click extends from
+                        // here.
+                        anchorIdRef.current = r.id
+                        setSelectedId(r.id)
+                      }}
+                    />
+                  )
+                })}
               </ul>
               {hasMore && (
                 <div className="mt-4 flex justify-center">
@@ -463,6 +621,41 @@ export function Dashboard({ settings, onSettingsChange }: DashboardProps): JSX.E
           {importNotice}
         </div>
       )}
+      {opNotice && (
+        <div
+          className="fixed bottom-20 start-1/2 z-50 -translate-x-1/2 cursor-pointer rounded-md border border-border bg-bg-surface px-4 py-2 text-w-small text-fg shadow-lg"
+          onClick={() => setOpNotice(null)}
+          role="status"
+        >
+          {opNotice}
+        </div>
+      )}
+      {(selectedIds.size > 0 || clipboard) && (
+        <div className="pointer-events-none fixed bottom-12 start-1/2 z-40 -translate-x-1/2">
+          <div className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-border bg-bg-surface px-3 py-1.5 text-w-small text-fg shadow-soft">
+            {selectedIds.size > 0 && (
+              <span className="text-fg">{t('dashboard.selectedCount', { count: selectedIds.size })}</span>
+            )}
+            {selectedIds.size > 0 && clipboard && <span className="text-fg-muted">·</span>}
+            {clipboard && (
+              <span className="text-fg-muted">
+                {clipboard.mode === 'cut'
+                  ? t('dashboard.clipboardCut', { count: clipboard.rel_paths.length })
+                  : t('dashboard.clipboardCopy', { count: clipboard.rel_paths.length })}
+              </span>
+            )}
+            {clipboard && (
+              <button
+                type="button"
+                onClick={() => setClipboard(null)}
+                className="rounded-md border border-border px-2 py-0.5 text-w-small text-fg-muted hover:text-fg"
+              >
+                {t('common.cancel')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       </div>
     </>
   )
@@ -487,11 +680,17 @@ function SyncIndicator({ status }: { status: SyncStatus | null }): JSX.Element {
 function ResultRow({
   hit,
   tags,
-  onOpen
+  onOpen,
+  onClickSelect,
+  selected = false,
+  cutMarked = false
 }: {
   hit: SearchResult
   tags: string[]
   onOpen: () => void
+  onClickSelect?: (e: React.MouseEvent) => void
+  selected?: boolean
+  cutMarked?: boolean
 }): JSX.Element {
   const { t } = useTranslation()
   return (
@@ -503,10 +702,21 @@ function ResultRow({
         e.dataTransfer.setData('application/x-repsil-doc', hit.rel_path)
         e.dataTransfer.effectAllowed = 'move'
       }}
+      className={cn(
+        selected && 'bg-accent/10 ring-1 ring-accent ring-inset',
+        cutMarked && 'opacity-60'
+      )}
     >
       <button
         type="button"
-        onClick={onOpen}
+        onClick={(e) => {
+          // Modifier-click → toggle/extend selection; plain click → open.
+          if (onClickSelect && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+            onClickSelect(e)
+            return
+          }
+          onOpen()
+        }}
         className="flex w-full items-start gap-3 px-4 py-3 text-start transition-colors hover:bg-bg-elevated/60"
       >
         <FileText className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" />

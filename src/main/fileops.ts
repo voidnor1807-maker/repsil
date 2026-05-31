@@ -233,6 +233,40 @@ export async function moveDocument(
   return { ok: true, newRelPath: newRel }
 }
 
+/** Copy a document into a different folder. Unlike move, no event suppression
+ *  is needed: the destination is a brand-new file as far as the watcher is
+ *  concerned, so its add handler does the DB insert + extraction naturally.
+ *  Filename collisions auto-suffix the same way as import. */
+export async function copyDocument(
+  repsil: RepsilDb,
+  relPath: string,
+  destFolderRel: string
+): Promise<FileOpResult> {
+  const row = repsil.queries.getDocumentByRelPath.get(relPath) as DocumentRow | undefined
+  if (!row) return { ok: false, error: 'no such file' }
+  const srcAbs = resolveInsideArchive(repsil.rootPath, relPath)
+  if (!srcAbs) return { ok: false, error: 'invalid source' }
+
+  const folder = destFolderRel.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  const destDirAbs = folder ? resolveInsideArchive(repsil.rootPath, folder) : repsil.rootPath
+  if (!destDirAbs) return { ok: false, error: 'invalid destination folder' }
+
+  try {
+    await fs.mkdir(destDirAbs, { recursive: true })
+  } catch (err) {
+    return { ok: false, error: `mkdir failed: ${(err as Error).message}` }
+  }
+  const targetName = await chooseTargetName(destDirAbs, row.filename)
+  const newRel = withinParent(folder, targetName)
+  const destAbs = join(destDirAbs, targetName)
+  try {
+    await fs.copyFile(srcAbs, destAbs, fs.constants.COPYFILE_EXCL)
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+  return { ok: true, newRelPath: newRel }
+}
+
 /** Create an empty folder under parentRel. Folder names are validated to be a
  *  single segment (no separators). No watcher suppression needed — chokidar
  *  doesn't track folders themselves, only file events inside them. */

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, promises as fs, rmSync, writeFileSync } from '
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
-import { createFolder, moveDocument, renameDocument } from './fileops'
+import { copyDocument, createFolder, moveDocument, renameDocument } from './fileops'
 import type { RepsilDb } from './db'
 
 interface Row {
@@ -142,6 +142,43 @@ describe('moveDocument', () => {
     expect(r.ok).toBe(true)
     expect(r.newRelPath).toBe('sub/a.pdf')
     expect(existsSync(join(workdir, 'sub', 'a.pdf'))).toBe(true)
+  })
+})
+
+describe('copyDocument', () => {
+  let workdir: string
+  beforeEach(() => {
+    workdir = mkdtempSync(join(tmpdir(), 'repsil-fileops-copy-'))
+  })
+  afterEach(() => rmSync(workdir, { recursive: true, force: true }))
+
+  test('copies a file into a destination folder, leaving the source intact', async () => {
+    const { repsil, docs } = stubRepsil(workdir)
+    writeFileSync(join(workdir, 'note.txt'), 'hello')
+    docs.set('note.txt', { rel_path: 'note.txt', filename: 'note.txt', ext: 'txt' })
+
+    const r = await copyDocument(repsil, 'note.txt', 'inbox')
+
+    expect(r.ok).toBe(true)
+    expect(r.newRelPath).toBe('inbox/note.txt')
+    expect(existsSync(join(workdir, 'note.txt'))).toBe(true)
+    expect(existsSync(join(workdir, 'inbox', 'note.txt'))).toBe(true)
+    expect(await fs.readFile(join(workdir, 'inbox', 'note.txt'), 'utf-8')).toBe('hello')
+  })
+
+  test('auto-suffixes on filename collision in the destination', async () => {
+    const { repsil, docs } = stubRepsil(workdir)
+    await fs.mkdir(join(workdir, 'inbox'))
+    writeFileSync(join(workdir, 'inbox', 'note.txt'), 'existing')
+    writeFileSync(join(workdir, 'note.txt'), 'fresh')
+    docs.set('note.txt', { rel_path: 'note.txt', filename: 'note.txt', ext: 'txt' })
+
+    const r = await copyDocument(repsil, 'note.txt', 'inbox')
+
+    expect(r.ok).toBe(true)
+    expect(r.newRelPath).toBe('inbox/note (1).txt')
+    expect(await fs.readFile(join(workdir, 'inbox', 'note.txt'), 'utf-8')).toBe('existing')
+    expect(await fs.readFile(join(workdir, 'inbox', 'note (1).txt'), 'utf-8')).toBe('fresh')
   })
 })
 

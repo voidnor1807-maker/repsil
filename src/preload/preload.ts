@@ -79,6 +79,10 @@ const api = {
      *  auto-suffixes on filename collision). */
     move: (relPath: string, destFolderRel: string): Promise<FileOpResult> =>
       ipcRenderer.invoke('documents:move', relPath, destFolderRel),
+    /** Copy a file into a different folder. The destination becomes its own
+     *  independent document; metadata is NOT shared with the original. */
+    copy: (relPath: string, destFolderRel: string): Promise<FileOpResult> =>
+      ipcRenderer.invoke('documents:copy', relPath, destFolderRel),
     /** Electron 32+ no longer exposes File.path; renderer must resolve dropped
      *  file paths through this bridge. Returns '' for non-file blobs. */
     resolveDroppedPath: (file: File): string => {

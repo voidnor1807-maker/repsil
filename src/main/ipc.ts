@@ -33,6 +33,7 @@ import { getSettings, loadArchiveSettings, updateSettings } from './settings'
 import { getDb, openDb } from './db'
 import { bindQueue, drainPending, enqueueExtraction, queueStatus } from './extraction/queue'
 import {
+  copyDocument,
   createFolder,
   importExternalFiles,
   moveDocument,
@@ -210,6 +211,15 @@ export function registerIpcHandlers(): void {
       const current = getDb()
       if (!current) return { ok: false, error: 'no archive open' }
       return moveDocument(current, relPath, destFolderRel)
+    }
+  )
+
+  ipcMain.handle(
+    'documents:copy',
+    async (_evt, relPath: string, destFolderRel: string): Promise<FileOpResult> => {
+      const current = getDb()
+      if (!current) return { ok: false, error: 'no archive open' }
+      return copyDocument(current, relPath, destFolderRel)
     }
   )
 
